@@ -1,0 +1,37 @@
+
+import React from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { Attendance } from './pages/Attendance';
+import { Payroll } from './pages/Payroll';
+import { Compliance } from './pages/Compliance';
+import { Employees } from './pages/Employees';
+import { Shifts } from './pages/Shifts';
+import { Onboarding } from './pages/Onboarding';
+import { AiAssistant } from './components/AiAssistant';
+import { GlobalProvider } from './context/GlobalContext';
+
+function App() {
+  return (
+    <GlobalProvider>
+      <HashRouter>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/attendance" element={<Attendance />} />
+            <Route path="/payroll" element={<Payroll />} />
+            <Route path="/compliance" element={<Compliance />} />
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/shifts" element={<Shifts />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <AiAssistant />
+        </Layout>
+      </HashRouter>
+    </GlobalProvider>
+  );
+}
+
+export default App;
