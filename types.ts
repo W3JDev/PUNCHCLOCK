@@ -1,5 +1,4 @@
 
-
 export interface CompanyProfile {
   name: string;
   regNo: string;
@@ -74,6 +73,7 @@ export interface Employee {
   bankName?: string;
   email?: string;
   faceRegistered?: boolean;
+  faceDescriptor?: number[]; // Added for Real Biometrics
   skills?: string[];
   reportsTo?: string; 
   onboardingStep?: number; 
@@ -95,7 +95,7 @@ export interface AttendanceRecord {
   date: string;
   checkIn: string | null;
   checkOut: string | null;
-  location: { lat: number; lng: number } | null;
+  location: { lat: number; lng: number; accuracy?: number } | null;
   method: 'QR' | 'Face' | 'PIN';
   status: 'Present' | 'Late' | 'Absent';
   riskScore?: number; 
@@ -103,15 +103,36 @@ export interface AttendanceRecord {
 
 export interface PayrollEntry {
   employeeId: string;
+  name: string;
+  role: string;
+  department: string;
   month: string;
+  
+  // Breakdown
+  standardDays: number;
+  daysWorked: number;
+  unpaidLeaves: number;
+  totalLatenessMins: number;
+  
+  // Money
   basicSalary: number;
+  hourlyRate: number;
+  
   allowances: number;
-  overtime: number;
+  
+  overtimeHours: number;
+  overtimeAmount: number;
+  
+  grossPay: number;
+  
+  // Deductions
   epf: number;
   socso: number;
   eis: number;
   pcb: number; 
+  
   netSalary: number;
+  status: 'PAID' | 'PENDING';
 }
 
 export interface Shift {

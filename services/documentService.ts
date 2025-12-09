@@ -1,5 +1,4 @@
 
-
 import { CompanyProfile, Employee, PayrollEntry } from "../types";
 
 // Access global jsPDF variable
@@ -404,9 +403,9 @@ export const generatePayslipPDF = (
 
   addRow("Basic Salary", entry.basicSalary);
   if (entry.allowances > 0) addRow("Allowances (Fixed & Variable)", entry.allowances);
-  if (entry.overtime > 0) addRow("Overtime Pay", entry.overtime);
+  if (entry.overtimeAmount > 0) addRow("Overtime Pay", entry.overtimeAmount);
   
-  const totalEarnings = entry.basicSalary + entry.allowances + entry.overtime;
+  const totalEarnings = entry.basicSalary + entry.allowances + entry.overtimeAmount;
   
   y += 2;
   doc.setLineWidth(0.2);

@@ -1,7 +1,6 @@
 
-
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Clock, 
@@ -18,7 +17,8 @@ import {
   ChevronRight,
   BookOpen,
   Sun,
-  Moon
+  Moon,
+  HelpCircle
 } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { UserRole } from '../types';
@@ -40,28 +40,35 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon: Icon, label, colorClass, on
       to={to}
       onClick={onClick}
       className={({ isActive }) => `
-        flex items-center gap-4 py-5 mb-3 rounded-xl transition-all duration-100 group relative
-        ${isCollapsed ? 'justify-center px-2' : 'px-6'}
-        border-2
+        flex items-center gap-3 py-3 mb-2 rounded-lg transition-all duration-200 group relative
+        ${isCollapsed ? 'justify-center px-2' : 'px-4'}
+        border border-transparent
         ${isActive 
-          ? `bg-white border-white text-black shadow-[4px_4px_0_0_#ccc] dark:shadow-[4px_4px_0_0_#ccc]` 
-          : 'bg-transparent border-transparent text-gray-500 dark:text-gray-300 hover:bg-[#222] hover:border-black/50 dark:hover:border-white/50 hover:text-white'}
+          ? `bg-white text-black shadow-md` 
+          : 'text-gray-500 dark:text-gray-400 hover:bg-[#222] hover:text-white'}
       `}
     >
       {({ isActive }) => (
         <>
           <Icon 
-            className={`w-8 h-8 ${isActive ? 'text-black' : 'text-gray-400 group-hover:text-white'}`} 
-            strokeWidth={isActive ? 3 : 2}
+            className={`w-5 h-5 ${isActive ? 'text-black' : 'text-gray-400 group-hover:text-white'}`} 
+            strokeWidth={isActive ? 2.5 : 2}
           />
           
           {!isCollapsed && (
             <span className={`
-              font-display font-bold uppercase tracking-wide text-lg relative z-10 whitespace-nowrap
+              font-sans font-semibold text-sm relative z-10 whitespace-nowrap
               ${isActive ? 'text-black' : 'text-gray-500 dark:text-gray-300 group-hover:text-white'}
             `}>
               {label}
             </span>
+          )}
+          
+          {/* Tooltip for collapsed state */}
+          {isCollapsed && (
+             <div className="absolute left-full ml-4 px-2 py-1 bg-white text-black text-xs font-bold rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none shadow-lg">
+                {label}
+             </div>
           )}
         </>
       )}
@@ -69,8 +76,6 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon: Icon, label, colorClass, on
   );
 };
 
-// Updated Configuration: Onboarding is strictly for Staff (New Hires) to see in sidebar.
-// Admins manage it via Employees page.
 const NAV_CONFIG = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", roles: ['Admin', 'HR', 'Manager', 'Staff'], color: "bg-blue-500" },
   { to: "/attendance", icon: Clock, label: "Smart Kiosk", roles: ['Admin', 'Manager'], color: "bg-orange-500" },
@@ -82,14 +87,37 @@ const NAV_CONFIG = [
 ];
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { language, setLanguage, t, currentUser, switchRole, notifications, removeNotification, theme, toggleTheme } = useGlobal();
+  const { language, setLanguage, t, currentUser, logout, notifications, removeNotification, theme, toggleTheme } = useGlobal();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const location = useLocation();
 
-  const filteredNav = NAV_CONFIG.filter(item => item.roles.includes(currentUser.role));
+  // Redirect if not logged in (unless on login page)
+  if (!currentUser && location.pathname !== '/login') {
+      return <Navigate to="/login" replace />;
+  }
+
+  // Hide Layout for Login Page
+  if (location.pathname === '/login') {
+      return (
+          <>
+             <div className="fixed top-6 right-6 z-[100] flex flex-col items-end pointer-events-none w-full max-w-md px-4">
+                <div className="pointer-events-auto w-full">
+                {notifications.map(n => (
+                    <NeoToast key={n.id} message={n.message} type={n.type} onClose={() => removeNotification(n.id)} />
+                ))}
+                </div>
+            </div>
+            {children}
+          </>
+      );
+  }
+
+  // Filter Nav based on Role
+  const filteredNav = NAV_CONFIG.filter(item => item.roles.includes(currentUser!.role));
 
   return (
-    <div className="flex min-h-screen font-sans text-black dark:text-white relative bg-gray-100 dark:bg-black transition-colors duration-300">
+    <div className="flex h-screen font-sans text-black dark:text-white relative bg-gray-100 dark:bg-black overflow-hidden">
       
       {/* Notifications */}
       <div className="fixed top-6 right-6 z-[100] flex flex-col items-end pointer-events-none w-full max-w-md px-4">
@@ -108,64 +136,59 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <PWAInstallPrompt />
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-24 bg-white dark:bg-black border-b-2 border-black dark:border-white z-30 flex items-center justify-between px-6">
-         <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-blue-600 border-2 border-black dark:border-white flex items-center justify-center text-white">
-               <Command className="w-6 h-6" />
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-black border-b border-white/10 z-30 flex items-center justify-between px-4">
+         <div className="flex items-center gap-2">
+             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+               <Command className="w-5 h-5" />
              </div>
-             <h1 className="text-2xl font-black italic tracking-tighter text-black dark:text-white">PUNCH<span className="text-blue-500">⏰CLOCK</span></h1>
+             <h1 className="text-lg font-black italic tracking-tighter text-black dark:text-white">PUNCH<span className="text-blue-500">CLOCK</span></h1>
          </div>
-         <button onClick={() => setIsMobileMenuOpen(true)} className="p-3 border-2 border-black dark:border-white rounded-lg text-black dark:text-white active:bg-black active:text-white dark:active:bg-white dark:active:text-black">
-            <Menu className="w-8 h-8" />
+         <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 border border-white/20 rounded-lg text-black dark:text-white">
+            <Menu className="w-6 h-6" />
          </button>
       </div>
 
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/90 z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+        <div className="fixed inset-0 bg-black/80 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 flex flex-col transform transition-all duration-300 ease-in-out md:translate-x-0 md:static border-r-2 border-black dark:border-white bg-gray-50 dark:bg-black
-        ${isMobileMenuOpen ? 'translate-x-0 w-80' : '-translate-x-full md:translate-x-0'}
-        ${isCollapsed ? 'md:w-32' : 'md:w-80'}
+        fixed inset-y-0 left-0 z-50 flex flex-col bg-gray-50 dark:bg-[#050505] border-r border-white/10 transition-all duration-300 ease-in-out md:static
+        ${isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'}
+        ${isCollapsed ? 'md:w-20' : 'md:w-64'}
       `}>
           
           {/* Mobile Close Button */}
-          <button onClick={() => setIsMobileMenuOpen(false)} className="absolute top-4 right-4 text-white md:hidden p-2 border-2 border-white rounded-lg bg-red-600">
-            <X className="w-6 h-6" />
+          <button onClick={() => setIsMobileMenuOpen(false)} className="absolute top-4 right-4 text-white md:hidden p-2 bg-red-600 rounded-lg">
+            <X className="w-5 h-5" />
           </button>
 
           {/* Desktop Collapse Toggle */}
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:flex absolute -right-5 top-12 bg-white border-2 border-black text-black rounded-full p-2 hover:bg-blue-500 hover:text-white transition-colors z-50 shadow-md"
+            className="hidden md:flex absolute -right-3 top-8 bg-white text-black border border-gray-200 rounded-full p-1 hover:bg-blue-500 hover:text-white transition-colors z-50 shadow-md"
           >
-            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
 
           {/* Logo Area */}
-          <div className={`relative z-10 flex items-center gap-4 border-b-2 border-black/10 dark:border-white/20 transition-all duration-300 ${isCollapsed ? 'p-6 justify-center' : 'p-8'}`}>
-              <div className="w-12 h-12 shrink-0 bg-blue-600 border-2 border-black dark:border-white flex items-center justify-center shadow-[4px_4px_0_0_#000] dark:shadow-[4px_4px_0_0_#fff]">
-                 <Command className="w-8 h-8 text-white" />
+          <div className={`flex items-center gap-3 h-20 px-6 border-b border-white/5 ${isCollapsed ? 'justify-center px-0' : ''}`}>
+              <div className="w-10 h-10 shrink-0 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                 <Command className="w-6 h-6 text-white" />
                </div>
                {!isCollapsed && (
                  <div className="overflow-hidden whitespace-nowrap">
-                   <h1 className="text-2xl font-display font-black italic tracking-tighter text-black dark:text-white leading-none">
-                     PUNCH<span className="text-blue-600">⏰</span><br/>CLOCK
+                   <h1 className="text-xl font-black italic tracking-tighter text-black dark:text-white leading-none">
+                     PUNCH<span className="text-blue-600">.</span><br/>CLOCK
                    </h1>
                  </div>
                )}
-               {isCollapsed && (
-                 <div className="sr-only">PUNCH⏰</div>
-               )}
           </div>
           
-          <div className="md:hidden h-20"></div>
-
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-8 overflow-y-auto space-y-2 relative z-10 scrollbar-hide">
+          <nav className="flex-1 px-3 py-6 overflow-y-auto space-y-1 relative scrollbar-hide">
             {filteredNav.map(item => (
               <NavItem 
                 key={item.to} 
@@ -177,55 +200,48 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 isCollapsed={isCollapsed}
               />
             ))}
+            
+            <div className="my-4 border-t border-white/5"></div>
+
+            {/* Help Link */}
+            <NavItem 
+                to="/help"
+                icon={HelpCircle}
+                label="User Guide"
+                colorClass="bg-gray-500"
+                onClick={() => setIsMobileMenuOpen(false)}
+                isCollapsed={isCollapsed}
+            />
           </nav>
 
           {/* Footer Controls */}
-          <div className={`bg-gray-100 dark:bg-[#111] border-t-2 border-black/10 dark:border-white/20 relative z-10 transition-all duration-300 ${isCollapsed ? 'p-4' : 'p-6'}`}>
-             <div className={`flex items-center gap-4 ${isCollapsed ? 'justify-center' : ''}`}>
-                <div className="w-12 h-12 shrink-0 rounded-full bg-white border-2 border-black flex items-center justify-center shadow-md overflow-hidden">
-                   {currentUser.avatar ? <img src={currentUser.avatar} alt="User" className="w-full h-full object-cover" /> : <UserCircle className="w-8 h-8 text-black" />}
+          <div className={`bg-gray-100 dark:bg-[#0a0a0a] border-t border-white/5 p-4`}>
+             <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
+                <div className="w-10 h-10 shrink-0 rounded-full bg-white border border-gray-200 overflow-hidden">
+                   {currentUser?.avatar ? <img src={currentUser.avatar} alt="User" className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full text-gray-400" />}
                 </div>
                 {!isCollapsed && (
-                  <div className="overflow-hidden">
-                     <p className="text-lg font-bold text-black dark:text-white truncate w-40">{currentUser.name}</p>
-                     <select 
-                        className="text-sm text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 cursor-pointer focus:ring-0 font-bold uppercase tracking-wider w-full"
-                        value={currentUser.role}
-                        onChange={(e) => switchRole(e.target.value as UserRole)}
-                     >
-                       <option value="Admin">Admin</option>
-                       <option value="HR">HR Dept</option>
-                       <option value="Manager">Manager</option>
-                       <option value="Staff">Staff</option>
-                     </select>
+                  <div className="overflow-hidden min-w-0 flex-1">
+                     <p className="text-sm font-bold text-black dark:text-white truncate">{currentUser?.name}</p>
+                     <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider">{currentUser?.role}</p>
                   </div>
                 )}
              </div>
              
              {!isCollapsed && (
-               <div className="flex flex-col gap-2 mt-4">
-                 <div className="flex gap-2">
-                   <div className="flex-1 relative">
-                     <select 
-                       className="w-full appearance-none bg-white dark:bg-black border-2 border-black dark:border-white rounded-lg p-2 text-sm font-bold text-center focus:outline-none text-black dark:text-white cursor-pointer hover:bg-gray-200 dark:hover:bg-white dark:hover:text-black transition-colors"
-                       value={language}
-                       onChange={(e) => setLanguage(e.target.value as any)}
-                     >
-                       <option value="en">EN</option>
-                       <option value="ms">BM</option>
-                       <option value="zh">CN</option>
-                     </select>
-                   </div>
-                   
-                   <button 
-                     onClick={toggleTheme}
-                     className="flex-1 flex items-center justify-center p-2 rounded-lg border-2 border-black dark:border-white bg-white dark:bg-black text-black dark:text-white hover:bg-gray-200 dark:hover:bg-white dark:hover:text-black transition-all"
-                   >
-                      {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                   </button>
-                 </div>
+               <div className="flex gap-2 mt-4">
+                 <button 
+                   onClick={toggleTheme}
+                   className="flex-1 flex items-center justify-center p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-all border border-transparent dark:border-white/10"
+                   title="Toggle Theme"
+                 >
+                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                 </button>
 
-                 <button className="flex items-center justify-center gap-2 p-3 rounded-lg bg-red-600 border-2 border-black dark:border-white text-white hover:bg-red-500 transition-all text-sm font-bold uppercase shadow-[2px_2px_0_0_#000] dark:shadow-[2px_2px_0_0_#fff]">
+                 <button 
+                   onClick={() => logout()}
+                   className="flex-1 flex items-center justify-center gap-2 p-2 rounded-lg bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white transition-all text-xs font-bold uppercase border border-red-600/20"
+                 >
                    <LogOut className="w-4 h-4" /> {t.logout}
                  </button>
                </div>
@@ -234,8 +250,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 md:p-10 pt-28 p-6 overflow-y-auto h-screen relative z-10 bg-gray-100 dark:bg-black">
-        <div className="max-w-[1800px] mx-auto pb-20">
+      <main className="flex-1 pt-16 md:pt-0 overflow-y-auto bg-white dark:bg-black relative">
+        <div className="max-w-[1600px] mx-auto p-4 md:p-8 lg:p-10 pb-24 min-h-full">
            {children}
         </div>
       </main>

@@ -1,8 +1,8 @@
 
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Employee, Language, AttendanceRecord, User, UserRole, Shift, LeaveRequest, CompanyProfile, PayrollSettings, Announcement, GeneralRequest } from '../types';
 import { translations } from '../services/i18n';
+import { useNavigate } from 'react-router-dom';
 
 interface Notification {
   id: string;
@@ -11,71 +11,106 @@ interface Notification {
 }
 
 interface GlobalContextType {
+  // Data
   employees: Employee[];
+  attendanceRecords: AttendanceRecord[];
+  shifts: Shift[];
+  leaveRequests: LeaveRequest[];
+  companyProfile: CompanyProfile;
+  payrollSettings: PayrollSettings;
+  announcements: Announcement[];
+  generalRequests: GeneralRequest[];
+  
+  // Actions
   addEmployee: (emp: Employee) => void;
   updateEmployee: (emp: Employee) => void;
   deleteEmployee: (id: string) => void;
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  t: any; // Translation object
-  attendanceRecords: AttendanceRecord[];
   addAttendanceRecord: (record: AttendanceRecord) => void;
   getEmployeeAttendance: (employeeId: string) => AttendanceRecord[];
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
-  currentUser: User;
-  switchRole: (role: UserRole) => void;
-  notifications: Notification[];
-  addNotification: (message: string, type: 'success' | 'error' | 'info') => void;
-  removeNotification: (id: string) => void;
-  shifts: Shift[];
   addShift: (shift: Shift) => void;
   deleteShift: (id: string) => void;
   updateShiftStatus: (id: string, status: 'Approved' | 'Rejected') => void;
-  leaveRequests: LeaveRequest[];
   addLeaveRequest: (req: LeaveRequest) => void;
   updateLeaveRequest: (id: number, status: 'Approved' | 'Rejected') => void;
-  companyProfile: CompanyProfile;
   updateCompanyProfile: (profile: CompanyProfile) => void;
   updateOnboardingStep: (employeeId: string, step: number) => void;
-  payrollSettings: PayrollSettings;
   updatePayrollSettings: (settings: PayrollSettings) => void;
-  announcements: Announcement[];
   addAnnouncement: (ann: Announcement) => void;
-  generalRequests: GeneralRequest[];
   addGeneralRequest: (req: GeneralRequest) => void;
+  updateGeneralRequestStatus: (id: string, status: 'Approved' | 'Rejected') => void;
+
+  // UI/State
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: any;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  notifications: Notification[];
+  addNotification: (message: string, type: 'success' | 'error' | 'info') => void;
+  removeNotification: (id: string) => void;
+
+  // Auth
+  currentUser: User | null;
+  login: (email: string, role: UserRole) => void;
+  logout: () => void;
+  isAuthenticated: boolean;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
+// --- INITIAL DATA (Fallbacks) ---
 const INITIAL_EMPLOYEES: Employee[] = [
   { 
     id: '850101-10-5521', name: 'Ali Bin Abu', nric: '850101-10-5521', role: 'Manager', department: 'HR', status: 'Active', 
     baseSalary: 6500, joinDate: '2020-01-15', epfNo: '12345678', socsoNo: '850101105521',
     faceRegistered: true, skills: ['Leadership', 'Labor Law', 'Payroll'], reportsTo: '', onboardingStep: 4,
-    customAllowances: { phone: 100 }, documents: {}
+    customAllowances: { phone: 100 }, documents: {}, email: 'manager@mnjewel.com'
   },
   { 
-    id: '920505-14-1234', name: 'Sarah Lee', nric: '920505-14-1234', role: 'Developer', department: 'IT', status: 'Active', 
-    baseSalary: 4500, joinDate: '2021-03-10', epfNo: '87654321', socsoNo: '920505141234',
-    faceRegistered: true, skills: ['React', 'Node.js', 'AWS'], reportsTo: '850101-10-5521', onboardingStep: 4, documents: {}
+    id: 'ADMIN-001', name: 'System Admin', nric: '000000', role: 'Admin', department: 'IT', status: 'Active',
+    baseSalary: 0, joinDate: '2020-01-01', faceRegistered: false, onboardingStep: 4, email: 'admin@mnjewel.com'
   },
   { 
-    id: '881212-01-9988', name: 'Muthusamy A/L Raju', nric: '881212-01-9988', role: 'Technician', department: 'Ops', status: 'On Leave', 
-    baseSalary: 3200, joinDate: '2019-11-01', epfNo: '11223344', socsoNo: '881212019988',
-    faceRegistered: false, skills: ['Maintenance', 'Electrical', 'Safety'], reportsTo: '850101-10-5521', onboardingStep: 4, documents: {}
+    id: 'HR-001', name: 'Sarah HR', nric: '000001', role: 'HR', department: 'HR', status: 'Active',
+    baseSalary: 5000, joinDate: '2021-01-01', faceRegistered: true, onboardingStep: 4, email: 'hr@mnjewel.com'
   },
   { 
-    id: '950202-05-5566', name: 'Wong Wei Ming', nric: '950202-05-5566', role: 'Sales Exec', department: 'Sales', status: 'MIA', 
-    baseSalary: 3500, joinDate: '2022-06-20', epfNo: '99887766', socsoNo: '950202055566',
-    faceRegistered: true, skills: ['Negotiation', 'CRM', 'Mandarin'], reportsTo: '850101-10-5521', onboardingStep: 4, documents: {}
-  },
-  { 
-    id: 'NEW-HIRE-001', name: 'New Hire Demo', nric: '000000-00-0000', role: 'Intern', department: 'Admin', status: 'Active', 
-    baseSalary: 1500, joinDate: '2023-10-01', epfNo: '', socsoNo: '',
-    faceRegistered: false, skills: [], reportsTo: '850101-10-5521', onboardingStep: 0, documents: {}
-  },
+    id: 'STAFF-001', name: 'Siti Staff', nric: '990101-10-5522', role: 'Staff', department: 'Sales', status: 'Active',
+    baseSalary: 2500, joinDate: '2022-05-20', faceRegistered: true, onboardingStep: 4, email: 'staff@mnjewel.com'
+  }
 ];
+
+// Generate some initial attendance data for the last 5 days to populate charts
+const generateInitialAttendance = (): AttendanceRecord[] => {
+  const records: AttendanceRecord[] = [];
+  const today = new Date();
+  
+  for (let i = 0; i < 5; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    
+    // Randomize attendance for 4 employees
+    INITIAL_EMPLOYEES.forEach(emp => {
+      const rand = Math.random();
+      if (rand > 0.2) { // 80% attendance chance
+        const isLate = Math.random() > 0.8;
+        records.push({
+          id: Math.random().toString(36).substr(2, 9),
+          employeeId: emp.id,
+          date: dateStr,
+          checkIn: isLate ? '09:45:00' : '08:55:00',
+          checkOut: '18:05:00',
+          location: { lat: 3.1, lng: 101.7, accuracy: 10 },
+          method: 'Face',
+          status: isLate ? 'Late' : 'Present',
+          riskScore: 0
+        });
+      }
+    });
+  }
+  return records;
+};
 
 const INITIAL_COMPANY: CompanyProfile = {
   name: "MN JEWEL SDN BHD",
@@ -89,183 +124,71 @@ const INITIAL_COMPANY: CompanyProfile = {
     { id: '1', name: 'Annual Leave', daysPerYear: 12, allowCarryForward: true, maxCarryForwardDays: 5, minNoticeDays: 3, requireDocument: false },
     { id: '2', name: 'Medical Leave', daysPerYear: 14, allowCarryForward: false, minNoticeDays: 0, requireDocument: true },
     { id: '3', name: 'Emergency Leave', daysPerYear: 5, allowCarryForward: false, minNoticeDays: 0, requireDocument: false },
-    { id: '4', name: 'Unpaid Leave', daysPerYear: 0, allowCarryForward: false, minNoticeDays: 7, requireDocument: false },
   ]
 };
 
 const INITIAL_PAYROLL_SETTINGS: PayrollSettings = {
   enableEpfForForeigners: false,
   enableSocso: true,
-  globalAllowances: {
-    transport: 150,
-    phone: 50,
-    meal: 0
-  },
-  statutoryRates: {
-    epfEmployee: 11,
-    epfEmployer: 13,
-    socso: 0.5,
-    eis: 0.2
-  }
+  globalAllowances: { transport: 150, phone: 50, meal: 0 },
+  statutoryRates: { epfEmployee: 11, epfEmployer: 13, socso: 0.5, eis: 0.2 }
 };
 
-const INITIAL_ANNOUNCEMENTS: Announcement[] = [
-  { id: '1', title: 'Public Holiday Alert', content: 'Office will be closed on 31st August for Merdeka Day.', date: '2023-08-25', type: 'Holiday', author: 'HR' },
-  { id: '2', title: 'New SOP: WFH', content: 'Updated Work From Home policy is now available in the handbook.', date: '2023-09-01', type: 'Info', author: 'Admin' }
-];
-
-const INITIAL_LEAVE_REQUESTS: LeaveRequest[] = [
-  { id: 1, employeeId: '920505-14-1234', name: 'Sarah Lee', type: 'Annual', date: 'Oct 24-26', status: 'Pending', reason: 'Family Trip' },
-  { id: 2, employeeId: '850101-10-5521', name: 'Ali Bin Abu', type: 'Medical', date: 'Oct 23', status: 'Approved', reason: 'Fever', attachment: 'mc_ali.jpg' },
-  { id: 3, employeeId: '950202-05-5566', name: 'Wong Wei Ming', type: 'Emergency', date: 'Oct 25', status: 'Pending', reason: 'Car Breakdown' },
-];
-
-const generateMockAttendance = (emps: Employee[]): AttendanceRecord[] => {
-  const records: AttendanceRecord[] = [];
-  const today = new Date();
-  
-  emps.forEach(emp => {
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-
-      if (date.getDay() === 0 || date.getDay() === 6) continue;
-
-      const isLate = Math.random() > 0.8;
-      const isAbsent = Math.random() > 0.95;
-
-      if (isAbsent && emp.status !== 'MIA') {
-        records.push({
-          id: `${emp.id}-${dateStr}`,
-          employeeId: emp.id,
-          date: dateStr,
-          checkIn: null,
-          checkOut: null,
-          location: null,
-          method: 'Face',
-          status: 'Absent',
-          riskScore: 0
-        });
-      } else if (emp.status === 'Active') {
-        records.push({
-          id: `${emp.id}-${dateStr}`,
-          employeeId: emp.id,
-          date: dateStr,
-          checkIn: isLate ? '09:15 AM' : '08:55 AM',
-          checkOut: '06:05 PM',
-          location: { lat: 3.14, lng: 101.68 },
-          method: Math.random() > 0.5 ? 'Face' : 'QR',
-          status: isLate ? 'Late' : 'Present',
-          riskScore: Math.floor(Math.random() * 10)
-        });
-      }
-    }
+// --- PERSISTENCE HELPER ---
+const useStickyState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
+  const [value, setValue] = useState<T>(() => {
+    const stickyValue = window.localStorage.getItem(key);
+    return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
   });
-  return records;
-};
 
-const generateMockShifts = (emps: Employee[]): Shift[] => {
-  const shifts: Shift[] = [];
-  const today = new Date();
-  
-  emps.forEach((emp, index) => {
-    const shiftType = index % 2 === 0 ? 'Morning' : 'Afternoon';
-    const startTime = shiftType === 'Morning' ? '09:00' : '14:00';
-    let endTime = shiftType === 'Morning' ? '18:00' : '23:00';
-    const color = shiftType === 'Morning' ? 'blue' : 'orange';
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
 
-    const isOvertimeSample = index === 1; 
-
-    for(let i = -5; i < 20; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      if(d.getDay() !== 0 && d.getDay() !== 6) {
-        
-        let otHours = 0;
-        let isOT = false;
-        let status: 'Approved' | 'Pending' = 'Approved';
-
-        if (isOvertimeSample && i === 5) {
-            endTime = '21:00'; 
-            otHours = 3;
-            isOT = true;
-            status = 'Pending';
-        }
-
-        shifts.push({
-          id: `shift-${emp.id}-${d.toISOString().split('T')[0]}`,
-          employeeId: emp.id,
-          date: d.toISOString().split('T')[0],
-          type: shiftType as any,
-          startTime,
-          endTime,
-          color,
-          isOvertime: isOT,
-          overtimeHours: otHours,
-          approvalStatus: status
-        });
-      }
-    }
-  });
-  return shifts;
+  return [value, setValue];
 };
 
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(INITIAL_LEAVE_REQUESTS);
+  // --- STATE WITH PERSISTENCE ---
+  const [employees, setEmployees] = useStickyState<Employee[]>('pc_employees', INITIAL_EMPLOYEES);
+  const [attendanceRecords, setAttendanceRecords] = useStickyState<AttendanceRecord[]>('pc_attendance', generateInitialAttendance());
+  const [shifts, setShifts] = useStickyState<Shift[]>('pc_shifts', []);
+  const [leaveRequests, setLeaveRequests] = useStickyState<LeaveRequest[]>('pc_leaves', []);
+  const [companyProfile, setCompanyProfile] = useStickyState<CompanyProfile>('pc_company', INITIAL_COMPANY);
+  const [payrollSettings, setPayrollSettings] = useStickyState<PayrollSettings>('pc_payroll', INITIAL_PAYROLL_SETTINGS);
+  const [announcements, setAnnouncements] = useStickyState<Announcement[]>('pc_announcements', []);
+  const [generalRequests, setGeneralRequests] = useStickyState<GeneralRequest[]>('pc_requests', []);
+  
+  // UI State (Non-persistent mostly)
   const [language, setLanguage] = useState<Language>('en');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(INITIAL_COMPANY);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [payrollSettings, setPayrollSettings] = useState<PayrollSettings>(INITIAL_PAYROLL_SETTINGS);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
-  const [generalRequests, setGeneralRequests] = useState<GeneralRequest[]>([]);
-
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 'ADMIN-001',
-    name: 'System Admin',
-    role: 'Admin',
-    avatar: 'https://ui-avatars.com/api/?name=System+Admin&background=random'
+  
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const savedUser = window.localStorage.getItem('pc_user');
+    return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  useEffect(() => {
-    setAttendanceRecords(generateMockAttendance(INITIAL_EMPLOYEES));
-    setShifts(generateMockShifts(INITIAL_EMPLOYEES));
-  }, []);
-
-  // Theme Handling
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
+  // --- ACTIONS ---
 
   const addEmployee = (emp: Employee) => {
     setEmployees(prev => [...prev, emp]);
-    setAttendanceRecords(prev => [...prev, ...generateMockAttendance([emp])]);
-    addNotification(`Employee ${emp.name} created successfully.`, 'success');
+    addNotification(`Employee ${emp.name} added.`, 'success');
   };
-  
+
   const updateEmployee = (emp: Employee) => {
     setEmployees(prev => prev.map(e => e.id === emp.id ? emp : e));
     addNotification(`Employee ${emp.name} updated.`, 'success');
   };
-  
+
   const deleteEmployee = (id: string) => {
     setEmployees(prev => prev.filter(e => e.id !== id));
-    addNotification(`Employee record deleted.`, 'info');
+    addNotification(`Employee removed.`, 'info');
   };
 
   const addAttendanceRecord = (record: AttendanceRecord) => {
-    setAttendanceRecords(prev => {
-      const filtered = prev.filter(r => !(r.employeeId === record.employeeId && r.date === record.date));
-      return [record, ...filtered];
-    });
+    setAttendanceRecords(prev => [record, ...prev]);
   };
 
   const getEmployeeAttendance = (employeeId: string) => {
@@ -275,26 +198,16 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const addShift = (shift: Shift) => {
-    setShifts(prev => {
-      const filtered = prev.filter(s => !(s.employeeId === shift.employeeId && s.date === shift.date));
-      return [...filtered, shift];
-    });
-    addNotification("Shift assigned successfully.", "success");
+    setShifts(prev => [...prev, shift]);
+    addNotification("Shift added.", "success");
   };
 
   const deleteShift = (id: string) => {
     setShifts(prev => prev.filter(s => s.id !== id));
-    addNotification("Shift removed.", "info");
   };
 
   const updateShiftStatus = (id: string, status: 'Approved' | 'Rejected') => {
-    setShifts(prev => prev.map(s => {
-       if (s.id === id) {
-          return { ...s, approvalStatus: status };
-       }
-       return s;
-    }));
-    addNotification(`Shift overtime ${status}.`, status === 'Approved' ? 'success' : 'info');
+    setShifts(prev => prev.map(s => s.id === id ? { ...s, approvalStatus: status } : s));
   };
 
   const addLeaveRequest = (req: LeaveRequest) => {
@@ -304,96 +217,78 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const updateLeaveRequest = (id: number, status: 'Approved' | 'Rejected') => {
     setLeaveRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    addNotification(`Request ${status}`, status === 'Approved' ? 'success' : 'info');
+    addNotification(`Leave request ${status}.`, status === 'Approved' ? 'success' : 'info');
   };
 
-  const updateCompanyProfile = (profile: CompanyProfile) => {
-    setCompanyProfile(profile);
-    addNotification("Company details updated.", "success");
-  };
-
+  const updateCompanyProfile = (profile: CompanyProfile) => setCompanyProfile(profile);
+  
   const updateOnboardingStep = (employeeId: string, step: number) => {
-     setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, onboardingStep: step } : e));
-     if (step === 4) addNotification("Onboarding Completed!", "success");
+    setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, onboardingStep: step } : e));
   };
 
-  const updatePayrollSettings = (settings: PayrollSettings) => {
-    setPayrollSettings(settings);
-    addNotification("Payroll configuration updated.", "success");
+  const updatePayrollSettings = (settings: PayrollSettings) => setPayrollSettings(settings);
+  const addAnnouncement = (ann: Announcement) => setAnnouncements(prev => [ann, ...prev]);
+  const addGeneralRequest = (req: GeneralRequest) => setGeneralRequests(prev => [req, ...prev]);
+  
+  const updateGeneralRequestStatus = (id: string, status: 'Approved' | 'Rejected') => {
+    setGeneralRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    addNotification(`Request ${status}.`, status === 'Approved' ? 'success' : 'info');
   };
 
-  const addAnnouncement = (ann: Announcement) => {
-    setAnnouncements(prev => [ann, ...prev]);
-    addNotification("Announcement posted.", "success");
-  };
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  const addGeneralRequest = (req: GeneralRequest) => {
-    setGeneralRequests(prev => [req, ...prev]);
-    addNotification(`${req.type} request submitted.`, "success");
-  };
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
-  const switchRole = (role: UserRole) => {
-    const mockUsers: Record<UserRole, User> = {
-      'Admin': { id: 'ADMIN-001', name: 'System Admin', role: 'Admin' },
-      'HR': { id: 'HR-001', name: 'Sarah HR', role: 'HR' },
-      'Manager': { id: 'MGR-001', name: 'Ali Manager', role: 'Manager' },
-      'Staff': { id: 'NEW-HIRE-001', name: 'New Hire Demo', role: 'Staff' } 
-    };
-    setCurrentUser(mockUsers[role]);
-    addNotification(`Switched role to ${role}`, 'info');
-  };
-
+  // --- NOTIFICATIONS ---
   const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
     setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      removeNotification(id);
-    }, 3000);
+    setTimeout(() => removeNotification(id), 3000);
   };
 
   const removeNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  // --- AUTH ---
+  const login = (email: string, role: UserRole) => {
+    // Find employee linked to this email (Simulated)
+    const emp = employees.find(e => e.email === email);
+    const user: User = {
+      id: emp ? emp.id : 'ADMIN-001',
+      name: emp ? emp.name : 'System Admin',
+      role: role,
+      avatar: `https://ui-avatars.com/api/?name=${emp ? emp.name : 'Admin'}&background=random`
+    };
+    setCurrentUser(user);
+    window.localStorage.setItem('pc_user', JSON.stringify(user));
+    addNotification(`Welcome back, ${user.name}`, 'success');
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    window.localStorage.removeItem('pc_user');
+    addNotification("Logged out successfully.", "info");
+  };
+
+  useEffect(() => {
+    if (theme === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [theme]);
+
   return (
     <GlobalContext.Provider value={{ 
-      employees, 
-      addEmployee, 
-      updateEmployee, 
-      deleteEmployee, 
-      language,
-      setLanguage,
-      t: translations[language],
-      attendanceRecords,
-      addAttendanceRecord,
-      getEmployeeAttendance,
-      theme,
-      toggleTheme,
-      currentUser,
-      switchRole,
-      notifications,
-      addNotification,
-      removeNotification,
-      shifts,
-      addShift,
-      deleteShift,
-      updateShiftStatus,
-      leaveRequests,
-      addLeaveRequest,
-      updateLeaveRequest,
-      companyProfile,
-      updateCompanyProfile,
+      employees, addEmployee, updateEmployee, deleteEmployee,
+      attendanceRecords, addAttendanceRecord, getEmployeeAttendance,
+      shifts, addShift, deleteShift, updateShiftStatus,
+      leaveRequests, addLeaveRequest, updateLeaveRequest,
+      companyProfile, updateCompanyProfile,
+      payrollSettings, updatePayrollSettings,
+      announcements, addAnnouncement,
+      generalRequests, addGeneralRequest, updateGeneralRequestStatus,
       updateOnboardingStep,
-      payrollSettings,
-      updatePayrollSettings,
-      announcements,
-      addAnnouncement,
-      generalRequests,
-      addGeneralRequest
+      language, setLanguage, t: translations[language],
+      theme, toggleTheme,
+      notifications, addNotification, removeNotification,
+      currentUser, login, logout, isAuthenticated: !!currentUser
     }}>
       {children}
     </GlobalContext.Provider>

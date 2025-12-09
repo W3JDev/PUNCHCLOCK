@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Sparkles, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Bot, X, Send, Sparkles, Mic, MicOff, Volume2, Trash2 } from 'lucide-react';
 import { chatWithHRAssistant } from '../services/geminiService';
 import { ChatMessage } from '../types';
 import { useGlobal } from '../context/GlobalContext';
@@ -27,12 +27,42 @@ export const AiAssistant: React.FC = () => {
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null); // To store session promise if needed
 
+  // --- PERSISTENCE ---
+  useEffect(() => {
+    // Load from local storage on mount
+    const saved = localStorage.getItem('pc_chat_history');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Fix date strings back to Date objects
+        const hydrated = parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+        setMessages(hydrated);
+      } catch (e) {
+        console.error("Failed to load chat history", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Save to local storage on update
+    if (messages.length > 1) { // Don't save if only default welcome message
+       localStorage.setItem('pc_chat_history', JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  const clearHistory = () => {
+    setMessages([
+        { role: 'model', text: 'History cleared. How can I help you now?', timestamp: new Date() }
+    ]);
+    localStorage.removeItem('pc_chat_history');
+  };
+
   // --- SCROLL TO BOTTOM ---
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isOpen]);
 
   // --- CLEANUP ON UNMOUNT ---
   useEffect(() => {
@@ -227,9 +257,14 @@ export const AiAssistant: React.FC = () => {
               </div>
               <h3 className="font-black text-white text-lg tracking-wide uppercase">HR LEGAL AI</h3>
             </div>
-            <button onClick={() => { setIsOpen(false); stopLiveSession(); }} className="text-white/80 hover:text-white">
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex gap-1">
+                <button onClick={clearHistory} className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded" title="Clear History">
+                    <Trash2 className="w-5 h-5" />
+                </button>
+                <button onClick={() => { setIsOpen(false); stopLiveSession(); }} className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded">
+                    <X className="w-6 h-6" />
+                </button>
+            </div>
           </div>
 
           {/* Messages Area */}

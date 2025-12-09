@@ -9,6 +9,8 @@ import { Compliance } from './pages/Compliance';
 import { Employees } from './pages/Employees';
 import { Shifts } from './pages/Shifts';
 import { Onboarding } from './pages/Onboarding';
+import { Login } from './pages/Login';
+import { UserGuide } from './pages/UserGuide';
 import { AiAssistant } from './components/AiAssistant';
 import { GlobalProvider } from './context/GlobalContext';
 
@@ -18,6 +20,7 @@ function App() {
       <HashRouter>
         <Layout>
           <Routes>
+            <Route path="/login" element={<Login />} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/payroll" element={<Payroll />} />
@@ -25,6 +28,7 @@ function App() {
             <Route path="/employees" element={<Employees />} />
             <Route path="/shifts" element={<Shifts />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/help" element={<UserGuide />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <AiAssistant />

@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Search, X, Clock, MapPin, Calendar as CalendarIcon, CheckCircle, AlertTriangle, XCircle, ArrowRight, User, Briefcase, Hash, Filter, MoreHorizontal, Trash2, ChevronLeft, ChevronRight, Lock, Download, ScanFace, GitFork, Camera, RefreshCcw, LayoutList, History, Award, BookOpen } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { Employee, AttendanceRecord } from '../types';
 import { NeoButton, NeoCard, NeoInput, NeoBadge } from '../components/NeoComponents';
+import { loadFaceModels, detectFace } from '../services/faceBiometricService';
 
 // Predefined skills for quick selection
 const COMMON_SKILLS = [
@@ -27,6 +28,15 @@ export const Employees: React.FC = () => {
   // Edit Form State
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [newSkillInput, setNewSkillInput] = useState('');
+  
+  // Video Ref for Face Enrollment
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Load models on mount
+  useEffect(() => {
+      loadFaceModels();
+  }, []);
 
   const filteredEmployees = employees.filter(e => 
     e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,13 +81,44 @@ export const Employees: React.FC = () => {
     }
   };
 
-  const registerFace = () => {
-     addNotification("Initiating Face Scan...", "info");
-     setTimeout(() => {
-        setFormData(prev => ({ ...prev, faceRegistered: true }));
+  // Start Camera for Enrollment
+  useEffect(() => {
+      if (isFaceRegMode) {
+          navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+              streamRef.current = stream;
+              if (videoRef.current) {
+                  videoRef.current.srcObject = stream;
+                  videoRef.current.play();
+              }
+          }).catch(err => console.error("Cam Error", err));
+      } else {
+          // Stop camera
+          if (streamRef.current) {
+              streamRef.current.getTracks().forEach(track => track.stop());
+              streamRef.current = null;
+          }
+      }
+  }, [isFaceRegMode]);
+
+  const captureFace = async () => {
+     if (!videoRef.current) return;
+     
+     addNotification("Scanning Face...", "info");
+     const detection = await detectFace(videoRef.current);
+     
+     if (detection) {
+        // Convert Float32Array to standard array for JSON storage
+        const descriptorArray = Array.from(detection.descriptor);
+        setFormData(prev => ({ 
+            ...prev, 
+            faceRegistered: true,
+            faceDescriptor: descriptorArray
+        }));
         setIsFaceRegMode(false);
-        addNotification("Face ID Biometrics Captured & Encrypted", "success");
-     }, 2500);
+        addNotification("Face Biometrics Captured Successfully", "success");
+     } else {
+         addNotification("No face detected. Please center your face.", "error");
+     }
   };
 
   const handleResetOnboarding = (empId: string) => {
@@ -454,17 +495,20 @@ export const Employees: React.FC = () => {
                           <h4 className="text-white font-black uppercase text-xl mb-6">Biometric Enrollment</h4>
                           <div className="w-64 h-64 mx-auto bg-gray-900 rounded-3xl mb-6 relative overflow-hidden border-[6px] border-[#FFD700] shadow-[0_0_30px_rgba(255,215,0,0.3)]">
                              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent animate-scan z-10"></div>
-                             {/* Simulated Camera View */}
-                             <div className="absolute inset-0 flex items-center justify-center text-gray-700">
-                                <ScanFace className="w-32 h-32 opacity-20" />
-                             </div>
+                             {/* Real Camera View */}
+                             <video 
+                                 ref={videoRef}
+                                 autoPlay
+                                 muted
+                                 className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
+                             />
                              <div className="absolute bottom-4 inset-x-0 text-center z-20">
                                 <span className="bg-black/80 text-white text-xs px-3 py-1 rounded-full border border-white/30">Position Face in Center</span>
                              </div>
                           </div>
                           <div className="flex justify-center gap-4">
                               <NeoButton onClick={() => setIsFaceRegMode(false)} variant="danger">Cancel</NeoButton>
-                              <NeoButton onClick={registerFace} variant="primary" className="bg-[#FFD700] text-black border-white hover:bg-yellow-400">
+                              <NeoButton onClick={captureFace} variant="primary" className="bg-[#FFD700] text-black border-white hover:bg-yellow-400">
                                 <Camera className="w-5 h-5 mr-2" /> Capture Face
                               </NeoButton>
                           </div>

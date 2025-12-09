@@ -1,20 +1,43 @@
 {
-  "name": "PUNCH CLOCK HR",
+  "name": "PUNCH⏰CLOCK Malaysia",
   "short_name": "PUNCHCLOCK",
+  "description": "Next-Gen HR Attendance & Payroll System tailored for Malaysian SMEs. Features AI-powered compliance, automated statutory calculations (EPF/SOCSO), and neo-brutalist design.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3b82f6",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "categories": [
+    "business",
+    "productivity",
+    "utilities",
+    "finance"
+  ],
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Smart Kiosk",
+      "url": "/attendance",
+      "description": "Launch Attendance Kiosk"
+    },
+    {
+      "name": "Dashboard",
+      "url": "/",
+      "description": "View HR Dashboard"
+    }
+  ],
+  "screenshots": []
 }
