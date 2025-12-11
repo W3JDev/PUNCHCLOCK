@@ -1,337 +1,480 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Sparkles, Mic, MicOff, Volume2, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Bot, X, Send, Sparkles, Mic, MicOff, Maximize2, Minimize2, Command, Users, DollarSign, Activity, Plus, RefreshCw, FileText, Table as TableIcon, TrendingUp, AlertTriangle, ArrowRight, Zap, ShieldCheck, Scale } from 'lucide-react';
 import { chatWithHRAssistant } from '../services/geminiService';
 import { ChatMessage } from '../types';
 import { useGlobal } from '../context/GlobalContext';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+
+// POWER PROMPTS: Designed to show off specific capabilities
+const POWER_PROMPTS = [
+  { 
+    label: "Forensic Audit", 
+    desc: "Scan attendance for chronic lateness & risks",
+    icon:  ShieldCheck,
+    prompt: "Audit attendance for the last 30 days. Identify chronic latecomers (more than 3 times), calculate total minutes lost, and draft a strict memo to the Operations Department addressing this issue." 
+  },
+  { 
+    label: "Payroll Forecast", 
+    desc: "Predict next month's OT & costs",
+    icon: DollarSign,
+    prompt: "Analyze the current payroll run. Visualize the split between Basic Salary vs. Overtime. Who is the highest earner including OT? Predict next month's cost if we hire 2 more senior staff." 
+  },
+  { 
+    label: "Legal Scan", 
+    desc: "Check roster against Employment Act 1955",
+    icon: Scale,
+    prompt: "Check our roster against Employment Act 1955. Are there any staff working > 45 hours/week? Draft a formal Warning Letter template for staff who are MIA (Absent > 2 days)." 
+  },
+  { 
+    label: "Onboarding Bot", 
+    desc: "Identify bottlenecks in hiring pipeline",
+    icon: Users,
+    prompt: "List all employees currently in Onboarding. What is the bottleneck step? Generate a welcome email for new hires explaining the 'Friday Prayers' long lunch policy." 
+  }
+];
+
+// High Contrast Colors for Charts
+const COLORS = ['#3B82F6', '#FFD700', '#EF4444', '#10B981'];
+
+// --- MARKDOWN RENDERER COMPONENT ---
+// Updated to accept `isDarkBg` to decouple text color from user role.
+const MessageRenderer: React.FC<{ text: string, isDarkBg: boolean }> = ({ text, isDarkBg }) => {
+  const lines = text.split('\n');
+  
+  // Dynamic colors based on container background brightness
+  // isDarkBg=true  => Light Text (For Dark Bubbles)
+  // isDarkBg=false => Dark Text (For White Bubbles)
+  const headerColor = isDarkBg ? 'text-blue-400' : 'text-blue-600';
+  const boldColor = isDarkBg ? 'text-white' : 'text-black';
+  const textColor = isDarkBg ? 'text-gray-300' : 'text-gray-700';
+  const listMarker = isDarkBg ? 'text-blue-500' : 'text-blue-600';
+
+  return (
+    <div className="space-y-2">
+      {lines.map((line, idx) => {
+        if (line.startsWith('### ')) {
+            return <h4 key={idx} className={`text-lg font-black uppercase mt-4 mb-2 border-b ${isDarkBg ? 'border-white/10' : 'border-black/10'} pb-1 ${headerColor}`}>{line.replace('### ', '')}</h4>;
+        }
+        if (line.startsWith('**') && line.endsWith('**')) {
+             return <p key={idx} className={`font-bold text-md ${boldColor}`}>{line.replace(/\*\*/g, '')}</p>;
+        }
+        if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
+            return (
+                <div key={idx} className="flex gap-3 pl-2 items-start">
+                    <span className={`${listMarker} font-bold mt-1`}>•</span>
+                    <span className={textColor} dangerouslySetInnerHTML={{ __html: line.replace(/^[\*\-]\s/, '').replace(/\*\*(.*?)\*\*/g, `<b class="${boldColor}">$1</b>`) }} />
+                </div>
+            );
+        }
+        return <p key={idx} className={`${textColor} leading-relaxed`} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, `<b class="${boldColor}">$1</b>`) }} />;
+      })}
+    </div>
+  );
+};
 
 export const AiAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isImmersive, setIsImmersive] = useState(false);
+  
+  // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: 'Hello! I am your PUNCH⏰CLOCK AI. You can type or speak to me for HR tasks.', timestamp: new Date() }
+    { role: 'model', text: '### SYSTEM ONLINE\nI am your **HR Operations Agent**. I have full access to Payroll, Biometrics, and Legal Statutes.\n\nSelect a **Power Prompt** below to see what I can do.', timestamp: new Date() }
   ]);
+  
+  // AI Learning State
+  const [userPreferences, setUserPreferences] = useState<Record<string, number>>({});
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLiveActive, setIsLiveActive] = useState(false);
+  
+  // Visual/Agentic State
+  const [activeVisual, setActiveVisual] = useState<'NONE' | 'PAYROLL_CHART' | 'ATTENDANCE_CHART' | 'STAFF_TABLE' | 'POLICY_DOC'>('NONE');
   
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { theme, employees, attendanceRecords } = useGlobal();
+  const { employees, attendanceRecords, payrollSettings, currentUser, addNotification, companyProfile, documents, shifts } = useGlobal();
+  const navigate = useNavigate();
 
-  // --- LIVE API REFS ---
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const nextStartTimeRef = useRef<number>(0);
-  const sessionRef = useRef<any>(null); // To store session promise if needed
-
-  // --- PERSISTENCE ---
+  // --- PERSISTENCE & LEARNING ---
   useEffect(() => {
-    // Load from local storage on mount
     const saved = localStorage.getItem('pc_chat_history');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Fix date strings back to Date objects
         const hydrated = parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
         setMessages(hydrated);
-      } catch (e) {
-        console.error("Failed to load chat history", e);
-      }
+      } catch (e) { console.error(e); }
     }
   }, []);
 
   useEffect(() => {
-    // Save to local storage on update
-    if (messages.length > 1) { // Don't save if only default welcome message
-       localStorage.setItem('pc_chat_history', JSON.stringify(messages));
-    }
+    if (messages.length > 1) localStorage.setItem('pc_chat_history', JSON.stringify(messages));
   }, [messages]);
 
-  const clearHistory = () => {
-    setMessages([
-        { role: 'model', text: 'History cleared. How can I help you now?', timestamp: new Date() }
-    ]);
-    localStorage.removeItem('pc_chat_history');
+  const startNewChat = () => {
+      setMessages([{ role: 'model', text: 'Context cleared. Ready for next task.', timestamp: new Date() }]);
+      setActiveVisual('NONE');
+      localStorage.removeItem('pc_chat_history');
   };
 
-  // --- SCROLL TO BOTTOM ---
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isOpen]);
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isOpen, isImmersive]);
 
-  // --- CLEANUP ON UNMOUNT ---
-  useEffect(() => {
-    return () => stopLiveSession();
-  }, []);
+  // --- DATA COMPUTATION FOR VISUALS ---
+  const visualData = useMemo(() => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      const present = attendanceRecords.filter(r => r.date === todayStr && r.status === 'Present').length;
+      const late = attendanceRecords.filter(r => r.date === todayStr && r.status === 'Late').length;
+      const absent = employees.filter(e => e.status === 'Active').length - (present + late);
+      
+      const totalSalary = employees.reduce((acc, curr) => acc + curr.baseSalary, 0);
+      const estEPF = totalSalary * 0.13;
+      const estOT = totalSalary * 0.08; // Mock OT
+
+      let tableHeaders: string[] = [];
+      let tableRows: any[] = [];
+      let tableTitle = "";
+
+      if (activeVisual === 'STAFF_TABLE' || activeVisual === 'ATTENDANCE_CHART') {
+          const lateRecords = attendanceRecords.filter(r => r.status === 'Late' || r.status === 'Absent').slice(0, 10);
+          tableTitle = "Risk Audit: Late/Absent";
+          tableHeaders = ["Name", "Status", "Time", "Risk Score"];
+          tableRows = lateRecords.map(r => {
+              const emp = employees.find(e => e.id === r.employeeId);
+              return [emp?.name || 'Unknown', r.status, r.checkIn || 'N/A', `${r.riskScore}%`];
+          });
+      } else if (activeVisual === 'PAYROLL_CHART') {
+          tableTitle = "Top OT Earners";
+          tableHeaders = ["Name", "Base", "OT Hours", "Est. Payout"];
+          tableRows = employees.slice(0, 5).map(e => [e.name, `RM ${e.baseSalary}`, `${(Math.random() * 10).toFixed(1)}h`, `RM ${(e.baseSalary * 1.1).toFixed(0)}`]);
+      }
+
+      return { 
+          attendanceChart: [
+              { name: 'On Time', value: present },
+              { name: 'Late', value: late },
+              { name: 'Absent', value: absent }
+          ],
+          payrollChart: [
+              { name: 'Basic Wages', amount: totalSalary },
+              { name: 'EPF (13%)', amount: estEPF },
+              { name: 'Overtime', amount: estOT } 
+          ],
+          tableData: { title: tableTitle, headers: tableHeaders, rows: tableRows },
+          totalStaff: employees.length 
+      };
+  }, [attendanceRecords, employees, activeVisual]);
 
   // --- TEXT CHAT HANDLER ---
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = async (textOverride?: string) => {
+    const textToSend = textOverride || input;
+    if (!textToSend.trim()) return;
 
-    const userMsg: ChatMessage = { role: 'user', text: input, timestamp: new Date() };
+    const userMsg: ChatMessage = { role: 'user', text: textToSend, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
-    const history = messages.filter(m => m.role !== 'user').map(m => ({
+    const history = messages.map(m => ({
       role: m.role,
       parts: [{ text: m.text }]
     }));
 
-    const responseText = await chatWithHRAssistant(input, history);
+    if (!currentUser) return;
+
+    const response = await chatWithHRAssistant(textToSend, history, {
+        currentUser, employees, attendanceRecords, payrollSettings,
+        companyProfile, documents, shifts, userPreferences
+    });
     
-    setMessages(prev => [...prev, { role: 'model', text: responseText, timestamp: new Date() }]);
+    setMessages(prev => [...prev, { role: 'model', text: response.text, timestamp: new Date() }]);
+    
+    if (response.intent) {
+        setActiveVisual(response.intent as any);
+        if (!isImmersive) setIsImmersive(true); 
+    }
+
+    if (response.navigation) {
+        addNotification(`Navigating to ${response.navigation}...`, 'info');
+        navigate(response.navigation);
+        setIsImmersive(false);
+        if (isOpen) setIsOpen(false);
+    }
+
     setIsLoading(false);
   };
 
-  // --- LIVE API HELPERS ---
-  const createBlob = (data: Float32Array): { data: string; mimeType: string } => {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-      // Clamp values
-      let s = Math.max(-1, Math.min(1, data[i]));
-      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    
-    let binary = '';
-    const bytes = new Uint8Array(int16.buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    
-    return {
-      data: btoa(binary),
-      mimeType: 'audio/pcm;rate=16000',
-    };
-  };
+  // --- RENDER VISUALS ---
+  const renderDataDeck = () => {
+      if (activeVisual === 'NONE') {
+          return (
+              <div className="flex flex-col items-center justify-center h-full opacity-30 text-center p-8">
+                  <Command className="w-24 h-24 mb-6 text-white" strokeWidth={1} />
+                  <h3 className="text-2xl font-black text-white uppercase tracking-widest">Agent Ready</h3>
+                  <p className="text-sm text-gray-400 mt-2">Awaiting complex data query...</p>
+              </div>
+          );
+      }
 
-  const decodeAudioData = async (
-    base64String: string,
-    ctx: AudioContext
-  ): Promise<AudioBuffer> => {
-    const binaryString = atob(base64String);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    
-    const dataInt16 = new Int16Array(bytes.buffer);
-    const frameCount = dataInt16.length; 
-    const buffer = ctx.createBuffer(1, frameCount, 24000);
-    const channelData = buffer.getChannelData(0);
-    
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i] / 32768.0;
-    }
-    return buffer;
-  };
+      if (activeVisual === 'POLICY_DOC') {
+          return (
+              <div className="p-8 space-y-6 animate-in slide-in-from-right duration-500">
+                  <div className="flex items-center gap-3 mb-4 text-pink-500">
+                      <FileText className="w-8 h-8" />
+                      <h3 className="text-xl font-black text-white uppercase">Generated Document</h3>
+                  </div>
+                  <div className="bg-[#1a1a1a] border-l-4 border-pink-500 p-6 rounded-r-xl shadow-lg">
+                      <h4 className="text-lg font-bold text-white mb-2">Legal Draft</h4>
+                      <p className="text-gray-300 leading-relaxed font-serif text-sm whitespace-pre-wrap">
+                          {`TO: ALL STAFF\nFROM: HR DEPT\n\nRE: COMPLIANCE NOTICE\n\nThis memo serves as a formal reminder regarding Section 60A of the Employment Act 1955. Please be advised that work hours must not exceed 45 hours per week without approved OT.\n\nStrict adherence is required immediately.`}
+                      </p>
+                  </div>
+              </div>
+          );
+      }
 
-  // --- LIVE SESSION LOGIC ---
-  const startLiveSession = async () => {
-    setIsLiveActive(true);
-    setMessages(prev => [...prev, { role: 'model', text: 'Listening... (Speak now)', timestamp: new Date() }]);
+      if (activeVisual === 'STAFF_TABLE') {
+          return (
+              <div className="p-6 space-y-4 animate-in slide-in-from-right duration-500 h-full flex flex-col">
+                  <div className="flex items-center gap-3 mb-2 text-blue-400">
+                      <TableIcon className="w-6 h-6" />
+                      <h3 className="text-lg font-black text-white uppercase">{visualData.tableData.title}</h3>
+                  </div>
+                  <div className="flex-1 overflow-auto border border-white/10 rounded-xl bg-[#111]">
+                      <table className="w-full text-left text-sm">
+                          <thead className="bg-[#222] text-gray-400 sticky top-0 font-bold uppercase text-xs">
+                              <tr>
+                                  {visualData.tableData.headers.map((h, i) => <th key={i} className="p-3">{h}</th>)}
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-gray-300">
+                              {visualData.tableData.rows.map((row, i) => (
+                                  <tr key={i} className="hover:bg-white/5">
+                                      {row.map((cell: any, j: number) => (
+                                          <td key={j} className="p-3 font-mono">{cell}</td>
+                                      ))}
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          );
+      }
 
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass({ sampleRate: 16000 }); // Input rate
-      const outCtx = new AudioContextClass({ sampleRate: 24000 }); // Output rate
-      audioContextRef.current = outCtx; // Store output context for playback
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+      const isPayroll = activeVisual === 'PAYROLL_CHART';
+      const chartTitle = isPayroll ? 'Financial Forecast' : 'Attendance Audit';
+      const Icon = isPayroll ? DollarSign : Activity;
 
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          systemInstruction: { parts: [{ text: "You are a helpful HR assistant for PUNCHCLOCK Malaysia. Keep answers concise." }] },
-        },
-        callbacks: {
-          onopen: () => {
-             console.log("Live Session Open");
-             // Start Input Stream
-             const source = ctx.createMediaStreamSource(stream);
-             audioSourceRef.current = source;
-             const processor = ctx.createScriptProcessor(4096, 1, 1);
-             processorRef.current = processor;
-             
-             processor.onaudioprocess = (e) => {
-               const inputData = e.inputBuffer.getChannelData(0);
-               const blob = createBlob(inputData);
-               sessionPromise.then(session => {
-                  session.sendRealtimeInput({ media: blob });
-               });
-             };
-             
-             source.connect(processor);
-             processor.connect(ctx.destination);
-          },
-          onmessage: async (msg: LiveServerMessage) => {
-             // Handle Audio Output
-             const base64Audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-             if (base64Audio && audioContextRef.current) {
-                const buffer = await decodeAudioData(base64Audio, audioContextRef.current);
-                const source = audioContextRef.current.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContextRef.current.destination);
-                
-                const now = audioContextRef.current.currentTime;
-                const start = Math.max(nextStartTimeRef.current, now);
-                source.start(start);
-                nextStartTimeRef.current = start + buffer.duration;
-             }
-             
-             // Handle Interruption (Stop playback)
-             if (msg.serverContent?.interrupted) {
-                nextStartTimeRef.current = 0;
-             }
-          },
-          onclose: () => {
-            console.log("Live Session Closed");
-            setIsLiveActive(false);
-          },
-          onerror: (e) => {
-            console.error("Live Error", e);
-            setIsLiveActive(false);
-            setMessages(prev => [...prev, { role: 'model', text: 'Voice connection error.', timestamp: new Date() }]);
-          }
-        }
-      });
-      sessionRef.current = sessionPromise;
+      return (
+          <div className="p-6 space-y-6 animate-in slide-in-from-right duration-500">
+              <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 ${isPayroll ? 'bg-green-600' : 'bg-red-600'} rounded-lg flex items-center justify-center text-white`}>
+                      <Icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-black text-white uppercase">{chartTitle}</h3>
+              </div>
 
-    } catch (err) {
-      console.error(err);
-      setIsLiveActive(false);
-      alert("Microphone access failed.");
-    }
-  };
-
-  const stopLiveSession = () => {
-    setIsLiveActive(false);
-    
-    // Stop Tracks
-    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
-    
-    // Disconnect Nodes
-    audioSourceRef.current?.disconnect();
-    processorRef.current?.disconnect();
-    
-    // Close Audio Context
-    audioContextRef.current?.close();
-
-    // Close Session if we could reference the session object directly, 
-    // but the library handles standard WS closure usually on unload or error.
-    // Ideally we would call session.close() if we stored the resolved session.
-    sessionRef.current?.then((s: any) => s.close());
+              <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-[#1a1a1a] rounded-xl border border-white/10">
+                      <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{isPayroll ? 'Proj. Cost' : 'Risk Factor'}</p>
+                      <p className="text-2xl font-black text-white">{isPayroll ? 'RM ' + (visualData.payrollChart.reduce((a,b)=>a+b.amount,0)/1000).toFixed(1) + 'k' : 'High'}</p>
+                  </div>
+                  <div className="p-4 bg-[#1a1a1a] rounded-xl border border-white/10">
+                      <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{isPayroll ? 'Var. Ratio' : 'Absent Rate'}</p>
+                      <p className={`text-2xl font-black ${isPayroll ? 'text-green-500' : 'text-red-500'}`}>
+                          {isPayroll ? '18%' : Math.round((visualData.attendanceChart[2].value / visualData.totalStaff) * 100) + '%'}
+                      </p>
+                  </div>
+              </div>
+              
+              <div className="h-64 w-full border border-white/5 rounded-xl bg-black/20 p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                      {isPayroll ? (
+                          <BarChart data={visualData.payrollChart} layout="vertical">
+                              <XAxis type="number" hide />
+                              <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} cursor={{fill:'transparent'}} />
+                              <Bar dataKey="amount" fill="#10B981" radius={[0, 4, 4, 0]} barSize={30} label={{ position: 'right', fill: '#fff', fontSize: 10 }} />
+                          </BarChart>
+                      ) : (
+                          <PieChart>
+                              <Pie data={visualData.attendanceChart} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                  {visualData.attendanceChart.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index]} />)}
+                              </Pie>
+                              <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                          </PieChart>
+                      )}
+                  </ResponsiveContainer>
+              </div>
+              
+              {/* Contextual Table below chart */}
+              <div className="bg-[#1a1a1a] rounded-xl border border-white/10 p-4">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Key Drivers</h4>
+                  <div className="space-y-2 text-xs">
+                      {visualData.tableData.rows?.slice(0,3).map((r, i) => (
+                          <div key={i} className="flex justify-between text-gray-300 border-b border-white/5 pb-1">
+                              <span>{r[0]}</span>
+                              <span className="font-mono">{r[2] || r[3]}</span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      );
   };
 
   return (
     <>
-      {/* Floating Button */}
-      {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-8 right-8 bg-[#ef4444] text-white w-16 h-16 rounded-2xl border-2 border-white/20 shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] flex items-center justify-center hover:translate-y-[-2px] hover:shadow-[6px_6px_0_0_rgba(255,255,255,0.2)] transition-all z-50 group"
-        >
+      {!isOpen && !isImmersive && (
+        <button onClick={() => setIsOpen(true)} className="fixed bottom-8 right-8 bg-[#ef4444] text-white w-16 h-16 rounded-2xl border-2 border-white/20 shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] flex items-center justify-center hover:translate-y-[-2px] hover:shadow-[6px_6px_0_0_rgba(255,255,255,0.2)] transition-all z-50 group">
           <Bot className="w-8 h-8 group-hover:rotate-12 transition-transform" />
         </button>
       )}
 
-      {/* Chat Window */}
-      {isOpen && (
-        <div className="fixed bottom-8 right-8 w-96 h-[600px] bg-[#121212] border-2 border-white/20 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.1)] rounded-3xl flex flex-col z-50 overflow-hidden animate-in zoom-in-95 origin-bottom-right duration-200">
-          
-          {/* Header */}
+      {isOpen && !isImmersive && (
+        <div className="fixed bottom-8 right-8 w-96 h-[700px] bg-[#121212] border-2 border-white/20 shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden animate-in zoom-in-95 origin-bottom-right duration-200">
           <div className="bg-[#ef4444] p-4 border-b-2 border-white/10 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <div className="bg-white/20 p-1.5 rounded-lg">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
-              <h3 className="font-black text-white text-lg tracking-wide uppercase">HR LEGAL AI</h3>
+              <Sparkles className="w-4 h-4 text-white" />
+              <h3 className="font-black text-white text-lg tracking-wide uppercase">AI AGENT</h3>
             </div>
             <div className="flex gap-1">
-                <button onClick={clearHistory} className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded" title="Clear History">
-                    <Trash2 className="w-5 h-5" />
-                </button>
-                <button onClick={() => { setIsOpen(false); stopLiveSession(); }} className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded">
-                    <X className="w-6 h-6" />
-                </button>
+                <button onClick={startNewChat} className="text-white/80 hover:text-white p-1 rounded" title="New Chat"><Plus className="w-5 h-5"/></button>
+                <button onClick={() => setIsImmersive(true)} className="text-white/80 hover:text-white p-1 rounded"><Maximize2 className="w-5 h-5"/></button>
+                <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white p-1 rounded"><X className="w-6 h-6"/></button>
             </div>
           </div>
 
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a]" ref={scrollRef}>
+          <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a] space-y-4" ref={scrollRef}>
             {messages.map((msg, idx) => (
-              <div key={idx} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`
-                  max-w-[85%] p-3 rounded-2xl text-sm font-medium border
-                  ${msg.role === 'user' 
-                    ? 'bg-blue-600 text-white border-blue-500 rounded-tr-sm' 
-                    : 'bg-[#1a1a1a] text-gray-200 border-white/10 rounded-tl-sm'}
-                `}>
-                  {msg.text}
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] p-3 rounded-2xl text-sm border ${msg.role === 'user' ? 'bg-blue-600 text-white border-blue-500' : 'bg-[#1a1a1a] text-gray-200 border-white/10'}`}>
+                  {/* POP-OVER MODE: Both AI (bg-1a1a1a) and User (bg-blue-600) have dark backgrounds. Pass true. */}
+                  <MessageRenderer text={msg.text} isDarkBg={true} />
                 </div>
               </div>
             ))}
-            {isLiveActive && (
-               <div className="flex justify-center my-4">
-                  <div className="flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-full border border-red-500/50 animate-pulse">
-                     <Volume2 className="w-4 h-4 text-red-400" />
-                     <span className="text-xs font-bold text-red-300 uppercase tracking-widest">Live Voice Active</span>
-                  </div>
-               </div>
-            )}
-            {isLoading && !isLiveActive && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-[#1a1a1a] p-3 rounded-2xl text-xs text-gray-400">Thinking...</div>
-              </div>
-            )}
+            {isLoading && <div className="flex justify-start"><div className="bg-[#1a1a1a] p-3 rounded-2xl text-xs text-gray-400 animate-pulse">Running analysis...</div></div>}
           </div>
 
-          {/* Controls */}
           <div className="p-4 bg-[#121212] border-t border-white/10 flex flex-col gap-3">
-            {/* Live Voice Toggle */}
-            <button 
-              onClick={isLiveActive ? stopLiveSession : startLiveSession}
-              className={`w-full py-3 rounded-xl font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-2
-                ${isLiveActive 
-                   ? 'bg-red-600 text-white border-red-400 shadow-[0_0_15px_rgba(220,38,38,0.5)]' 
-                   : 'bg-[#222] text-gray-300 border-white/20 hover:bg-[#333]'}
-              `}
-            >
-               {isLiveActive ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-               {isLiveActive ? "End Voice Session" : "Start Voice Chat"}
-            </button>
-
-            {/* Text Input */}
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Power Scenarios</p>
+            <div className="grid grid-cols-1 gap-2 mb-2">
+                {POWER_PROMPTS.map((pp, idx) => (
+                    <button 
+                        key={idx} 
+                        onClick={() => handleSend(pp.prompt)} 
+                        className="text-left px-3 py-2 rounded-lg bg-[#222] border border-white/5 hover:bg-[#333] hover:border-blue-500/50 transition-all group"
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-300 group-hover:text-white">{pp.label}</span>
+                            <ArrowRight className="w-3 h-3 text-gray-600 group-hover:text-blue-500"/>
+                        </div>
+                    </button>
+                ))}
+            </div>
             <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Type message..."
-                  disabled={isLiveActive}
-                  className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 text-white text-sm"
-                />
-                <button 
-                  onClick={handleSend}
-                  disabled={isLoading || isLiveActive}
-                  className="bg-white text-black p-2.5 rounded-xl hover:bg-gray-200 disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
+                <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Ask HR..." className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                <button onClick={() => handleSend()} disabled={isLoading} className="bg-white text-black p-2.5 rounded-xl hover:bg-gray-200"><Send className="w-4 h-4" /></button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Immersive Mode */}
+      {isImmersive && (
+          <div className="fixed inset-0 z-[200] bg-black text-white font-sans flex animate-in zoom-in-95 duration-300">
+              {/* Sidebar */}
+              <div className="w-72 bg-[#0a0a0a] border-r border-white/10 flex flex-col p-6 hidden md:flex">
+                  <div className="flex items-center gap-3 mb-8">
+                      <div className="w-10 h-10 bg-[#FFD700] rounded-xl flex items-center justify-center text-black shadow-[4px_4px_0_0_#fff]"><Bot className="w-6 h-6"/></div>
+                      <h2 className="font-black text-xl uppercase tracking-tighter">Agent<br/>Console</h2>
+                  </div>
+                  <button onClick={startNewChat} className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold mb-6 transition-all shadow-lg"><Plus className="w-4 h-4"/> New Session</button>
+                  
+                  <div className="space-y-2 flex-1 overflow-y-auto">
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Execute Scenario</h4>
+                      {POWER_PROMPTS.map((pp, idx) => (
+                        <button 
+                            key={idx} 
+                            onClick={() => handleSend(pp.prompt)} 
+                            className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group"
+                        >
+                            <span className="text-xs font-bold text-gray-300 group-hover:text-white block">{pp.label}</span>
+                        </button>
+                      ))}
+                  </div>
+                  
+                  <button onClick={() => setIsImmersive(false)} className="mt-auto flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm font-bold"><Minimize2 className="w-4 h-4"/> Exit Fullscreen</button>
+              </div>
+
+              {/* Chat Area */}
+              <div className="flex-1 flex flex-col bg-black relative">
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+                  
+                  <div className="flex-1 overflow-y-auto p-8 space-y-6 relative z-10" ref={scrollRef}>
+                      {/* START STATE: Prompt Capsules */}
+                      {messages.length === 1 && (
+                          <div className="max-w-4xl mx-auto mt-20 grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-10 fade-in duration-700">
+                              {POWER_PROMPTS.map((pp, idx) => (
+                                  <button
+                                      key={idx}
+                                      onClick={() => handleSend(pp.prompt)}
+                                      className="group p-6 bg-[#1a1a1a] border border-white/10 hover:border-blue-500 hover:bg-[#222] rounded-2xl text-left transition-all hover:scale-[1.02] shadow-xl"
+                                  >
+                                      <div className="flex items-center gap-4 mb-2">
+                                          <div className="w-10 h-10 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                              <pp.icon className="w-5 h-5" />
+                                          </div>
+                                          <h4 className="font-black text-lg text-white uppercase">{pp.label}</h4>
+                                      </div>
+                                      <p className="text-sm text-gray-400 group-hover:text-gray-300">{pp.desc}</p>
+                                  </button>
+                              ))}
+                          </div>
+                      )}
+
+                      {/* Message Loop */}
+                      {messages.map((msg, idx) => (
+                          <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 ${msg.role === 'user' ? 'bg-white border-gray-200 text-black' : 'bg-[#FFD700] border-yellow-600 text-black'}`}>
+                                  {msg.role === 'user' ? <Users className="w-5 h-5"/> : <Bot className="w-5 h-5"/>}
+                              </div>
+                              <div className={`max-w-2xl p-6 rounded-3xl text-lg leading-relaxed shadow-lg border-2 ${msg.role === 'user' ? 'bg-[#1a1a1a] text-white border-white/20' : 'bg-white text-black border-gray-200'}`}>
+                                  {/* IMMERSIVE MODE: User is dark (bg-1a1a1a), AI is light (bg-white). Dynamic logic needed. */}
+                                  <MessageRenderer text={msg.text} isDarkBg={msg.role === 'user'} />
+                              </div>
+                          </div>
+                      ))}
+                      {isLoading && <div className="flex gap-4"><div className="w-10 h-10 rounded-full bg-[#FFD700] flex items-center justify-center shrink-0 animate-pulse"><Bot className="w-5 h-5 text-black"/></div><div className="bg-white/10 p-4 rounded-xl text-gray-400 text-sm">Processing...</div></div>}
+                  </div>
+
+                  <div className="p-6 bg-black border-t border-white/10 relative z-20">
+                      <div className="flex gap-4 max-w-4xl mx-auto">
+                          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Command the agent..." className="flex-1 bg-[#1a1a1a] border-2 border-white/20 rounded-2xl px-6 py-4 text-xl text-white focus:outline-none focus:border-[#FFD700] focus:shadow-[0_0_20px_rgba(255,215,0,0.2)] transition-all placeholder-gray-600" autoFocus />
+                          <button onClick={() => handleSend()} className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl transition-all shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] active:translate-y-1 active:shadow-none border-2 border-blue-400"><Send className="w-6 h-6" /></button>
+                      </div>
+                  </div>
+              </div>
+
+              {/* Data Deck */}
+              <div className="w-[450px] bg-[#050505] border-l border-white/10 flex flex-col hidden lg:flex transition-all">
+                  <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0a0a0a]">
+                      <h3 className="font-black text-gray-400 uppercase tracking-widest text-xs">Live Visual Deck</h3>
+                      <div className="flex gap-2"><div className={`w-3 h-3 rounded-full ${activeVisual !== 'NONE' ? 'bg-green-500 animate-pulse' : 'bg-gray-800'}`}></div></div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto relative">{renderDataDeck()}</div>
+                  <div className="p-6 border-t border-white/10 bg-[#0a0a0a] flex justify-between items-center text-xs font-mono">
+                      <span className="text-gray-500">POWERED BY GEMINI 2.5</span>
+                      <span className="text-[#FFD700] font-bold">MADE BY W3JDEV</span>
+                  </div>
+              </div>
+              <button onClick={() => setIsImmersive(false)} className="absolute top-4 right-4 md:hidden bg-red-600 text-white p-2 rounded-full z-50"><X className="w-6 h-6"/></button>
+          </div>
       )}
     </>
   );

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Employee, Language, AttendanceRecord, User, UserRole, Shift, LeaveRequest, CompanyProfile, PayrollSettings, Announcement, GeneralRequest } from '../types';
+import { Employee, Language, AttendanceRecord, User, UserRole, Shift, LeaveRequest, CompanyProfile, PayrollSettings, Announcement, GeneralRequest, CompanyDocument, CompanyEvent, EmploymentType } from '../types';
 import { translations } from '../services/i18n';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,6 +20,8 @@ interface GlobalContextType {
   payrollSettings: PayrollSettings;
   announcements: Announcement[];
   generalRequests: GeneralRequest[];
+  documents: CompanyDocument[];
+  events: CompanyEvent[];
   
   // Actions
   addEmployee: (emp: Employee) => void;
@@ -38,6 +40,10 @@ interface GlobalContextType {
   addAnnouncement: (ann: Announcement) => void;
   addGeneralRequest: (req: GeneralRequest) => void;
   updateGeneralRequestStatus: (id: string, status: 'Approved' | 'Rejected') => void;
+  addDocument: (doc: CompanyDocument) => void;
+  updateDocument: (id: string, updates: Partial<CompanyDocument>) => void;
+  addEvent: (evt: CompanyEvent) => void;
+  deleteEvent: (id: string) => void;
 
   // UI/State
   language: Language;
@@ -58,59 +64,147 @@ interface GlobalContextType {
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
-// --- INITIAL DATA (Fallbacks) ---
-const INITIAL_EMPLOYEES: Employee[] = [
-  { 
-    id: '850101-10-5521', name: 'Ali Bin Abu', nric: '850101-10-5521', role: 'Manager', department: 'HR', status: 'Active', 
-    baseSalary: 6500, joinDate: '2020-01-15', epfNo: '12345678', socsoNo: '850101105521',
-    faceRegistered: true, skills: ['Leadership', 'Labor Law', 'Payroll'], reportsTo: '', onboardingStep: 4,
-    customAllowances: { phone: 100 }, documents: {}, email: 'manager@mnjewel.com'
-  },
-  { 
-    id: 'ADMIN-001', name: 'System Admin', nric: '000000', role: 'Admin', department: 'IT', status: 'Active',
-    baseSalary: 0, joinDate: '2020-01-01', faceRegistered: false, onboardingStep: 4, email: 'admin@mnjewel.com'
-  },
-  { 
-    id: 'HR-001', name: 'Sarah HR', nric: '000001', role: 'HR', department: 'HR', status: 'Active',
-    baseSalary: 5000, joinDate: '2021-01-01', faceRegistered: true, onboardingStep: 4, email: 'hr@mnjewel.com'
-  },
-  { 
-    id: 'STAFF-001', name: 'Siti Staff', nric: '990101-10-5522', role: 'Staff', department: 'Sales', status: 'Active',
-    baseSalary: 2500, joinDate: '2022-05-20', faceRegistered: true, onboardingStep: 4, email: 'staff@mnjewel.com'
-  }
-];
-
-// Generate some initial attendance data for the last 5 days to populate charts
-const generateInitialAttendance = (): AttendanceRecord[] => {
-  const records: AttendanceRecord[] = [];
-  const today = new Date();
+// --- DEMO DATA GENERATOR ---
+const generateDemoData = () => {
+  const depts = ['HR', 'Sales', 'IT', 'Operations', 'Finance', 'Logistics'];
+  const firstNames = ['Ali', 'Chong', 'Muthu', 'Sarah', 'David', 'Siti', 'Wei', 'Raj', 'Jessica', 'Hassan', 'Tan', 'Kumar'];
+  const lastNames = ['Bin Abu', 'Lee', 'Samy', 'Tan', 'Wong', 'Singh', 'Abdullah', 'Lim', 'Krishnan'];
   
-  for (let i = 0; i < 5; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
-    
-    // Randomize attendance for 4 employees
-    INITIAL_EMPLOYEES.forEach(emp => {
-      const rand = Math.random();
-      if (rand > 0.2) { // 80% attendance chance
-        const isLate = Math.random() > 0.8;
-        records.push({
-          id: Math.random().toString(36).substr(2, 9),
-          employeeId: emp.id,
-          date: dateStr,
-          checkIn: isLate ? '09:45:00' : '08:55:00',
-          checkOut: '18:05:00',
-          location: { lat: 3.1, lng: 101.7, accuracy: 10 },
-          method: 'Face',
-          status: isLate ? 'Late' : 'Present',
-          riskScore: 0
-        });
-      }
-    });
+  const generatedEmployees: Employee[] = [];
+  const generatedAttendance: AttendanceRecord[] = [];
+
+  // 1. Create 50 Employees
+  for (let i = 0; i < 50; i++) {
+      const isManager = i < 5;
+      const isContract = i > 40;
+      const dept = depts[i % depts.length];
+      const fName = firstNames[i % firstNames.length];
+      const lName = lastNames[i % lastNames.length];
+      
+      const empType: EmploymentType = isContract ? 'Contract' : (i > 35 ? 'Intern' : 'Permanent');
+      
+      // Assign Specific Emails for Demo Accounts
+      let email = `${fName.toLowerCase()}.${lName.toLowerCase().replace(' ', '')}@mnjewel.com`;
+      if (i === 0) email = 'admin@mnjewel.com';
+      if (i === 1) email = 'hr@mnjewel.com';
+      if (i === 2) email = 'manager@mnjewel.com';
+      if (i === 3) email = 'staff@mnjewel.com';
+
+      generatedEmployees.push({
+          id: `EMP-${1000 + i}`,
+          name: `${fName} ${lName}`,
+          nric: `${90 + (i%10)}0101-10-${5000+i}`,
+          role: isManager ? 'Manager' : (empType === 'Intern' ? 'Intern' : 'Staff'),
+          department: dept,
+          employmentType: empType,
+          status: 'Active',
+          baseSalary: isManager ? 8000 : (empType === 'Intern' ? 1000 : 3500 + (i * 100)),
+          joinDate: '2022-01-15',
+          epfNo: `EPF-${10000+i}`,
+          faceRegistered: i % 3 === 0, // Some haven't registered
+          reportsTo: isManager ? '' : `EMP-100${i % 5}`, // Distribute among first 5
+          onboardingStep: 4,
+          email: email
+      });
   }
-  return records;
+
+  // 2. Create 30 Days of History
+  const today = new Date();
+  for (let d = 0; d < 30; d++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - d);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayOfWeek = date.getDay();
+
+      if (dayOfWeek === 0) continue; // Skip Sundays
+
+      generatedEmployees.forEach(emp => {
+          // Attendance Probability
+          const rand = Math.random();
+          if (rand > 0.95) {
+              // Absent
+              generatedAttendance.push({
+                  id: Math.random().toString(36),
+                  employeeId: emp.id,
+                  date: dateStr,
+                  checkIn: null, checkOut: null,
+                  location: null, method: 'Face',
+                  status: 'Absent', riskScore: 100
+              });
+          } else {
+              // Present
+              // Late Logic: 10% chance
+              const isLate = Math.random() > 0.9;
+              const hourIn = isLate ? 9 : 8;
+              const minIn = isLate ? Math.floor(Math.random() * 50) + 15 : Math.floor(Math.random() * 55);
+              const timeIn = `${hourIn.toString().padStart(2,'0')}:${minIn.toString().padStart(2,'0')}:00`;
+
+              // OT Logic: 15% chance
+              const isOT = Math.random() > 0.85;
+              const hourOut = isOT ? 20 : 18;
+              const minOut = Math.floor(Math.random() * 30);
+              const timeOut = `${hourOut.toString().padStart(2,'0')}:${minOut.toString().padStart(2,'0')}:00`;
+
+              // Late Mins calc
+              let lateMins = 0;
+              if (hourIn > 9 || (hourIn === 9 && minIn > 0)) {
+                  lateMins = ((hourIn - 9) * 60) + minIn;
+              }
+
+              // OT Mins calc (After 6pm)
+              let otMins = 0;
+              if (hourOut >= 18) {
+                  otMins = ((hourOut - 18) * 60) + minOut;
+              }
+
+              generatedAttendance.push({
+                  id: Math.random().toString(36),
+                  employeeId: emp.id,
+                  date: dateStr,
+                  checkIn: timeIn,
+                  checkOut: timeOut,
+                  location: { lat: 3.1, lng: 101.7, accuracy: 10 },
+                  method: 'Face',
+                  status: isLate ? 'Late' : 'Present',
+                  riskScore: isLate ? 30 : 0,
+                  lateMinutes: lateMins,
+                  otMinutes: otMins
+              });
+          }
+      });
+  }
+
+  // 3. Generate Mock Announcements & Requests for Dashboard
+  const mockAnnouncements: Announcement[] = [
+      { id: '1', title: 'System Maintenance', content: 'Scheduled downtime this Sunday 2AM-4AM.', date: today.toISOString().split('T')[0], type: 'Alert', author: 'IT Dept' },
+      { id: '2', title: 'Public Holiday (Thaipusam)', content: 'Office closed on Monday. OT rates apply for essential staff.', date: '2023-10-25', type: 'Holiday', author: 'HR' },
+      { id: '3', title: 'Q3 Townhall Meeting', content: 'All hands meeting at Main Hall.', date: '2023-10-20', type: 'Event', author: 'CEO' },
+      { id: '4', title: 'New Claims Policy', content: 'Mileage claim rate increased to RM0.70/km.', date: '2023-10-15', type: 'Info', author: 'Finance' },
+      { id: '5', title: 'Fire Drill', content: 'Mandatory evacuation drill at 3PM tomorrow.', date: '2023-10-28', type: 'Alert', author: 'Safety' },
+  ];
+
+  const mockLeaves: LeaveRequest[] = [
+      { id: 101, employeeId: generatedEmployees[5].id, name: generatedEmployees[5].name, type: 'Medical Leave', date: today.toISOString().split('T')[0], status: 'Pending', reason: 'High Fever', attachment: 'mc.jpg' },
+      { id: 102, employeeId: generatedEmployees[8].id, name: generatedEmployees[8].name, type: 'Annual Leave', date: '2023-11-01', status: 'Pending', reason: 'Family trip' },
+      { id: 103, employeeId: generatedEmployees[12].id, name: generatedEmployees[12].name, type: 'Emergency Leave', date: today.toISOString().split('T')[0], status: 'Pending', reason: 'Car breakdown' }
+  ];
+
+  const mockGeneralRequests: GeneralRequest[] = [
+      { id: '201', employeeId: generatedEmployees[2].id, employeeName: generatedEmployees[2].name, type: 'Claim', details: 'Grab to Client Meeting (RM 45)', date: today.toISOString().split('T')[0], status: 'Pending' },
+      { id: '202', employeeId: generatedEmployees[15].id, employeeName: generatedEmployees[15].name, type: 'Missing Punch', details: 'Forgot to clock out yesterday (18:00)', date: '2023-10-20', status: 'Pending' },
+      { id: '203', employeeId: generatedEmployees[20].id, employeeName: generatedEmployees[20].name, type: 'Claim', details: 'Team Lunch (RM 120)', date: '2023-10-18', status: 'Pending' }
+  ];
+
+  return { 
+      employees: generatedEmployees, 
+      attendance: generatedAttendance,
+      announcements: mockAnnouncements,
+      leaveRequests: mockLeaves,
+      generalRequests: mockGeneralRequests
+  };
 };
+
+const DEMO_DATA = generateDemoData();
 
 const INITIAL_COMPANY: CompanyProfile = {
   name: "MN JEWEL SDN BHD",
@@ -120,6 +214,7 @@ const INITIAL_COMPANY: CompanyProfile = {
   email: "hr@mnjewel.com",
   website: "www.mnjewel.com",
   logoUrl: "",
+  policies: "All employees must adhere to the company dress code. Working hours are 9-6. Leaves must be applied 3 days in advance.",
   leavePolicies: [
     { id: '1', name: 'Annual Leave', daysPerYear: 12, allowCarryForward: true, maxCarryForwardDays: 5, minNoticeDays: 3, requireDocument: false },
     { id: '2', name: 'Medical Leave', daysPerYear: 14, allowCarryForward: false, minNoticeDays: 0, requireDocument: true },
@@ -150,14 +245,16 @@ const useStickyState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<Re
 
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // --- STATE WITH PERSISTENCE ---
-  const [employees, setEmployees] = useStickyState<Employee[]>('pc_employees', INITIAL_EMPLOYEES);
-  const [attendanceRecords, setAttendanceRecords] = useStickyState<AttendanceRecord[]>('pc_attendance', generateInitialAttendance());
+  const [employees, setEmployees] = useStickyState<Employee[]>('pc_employees', DEMO_DATA.employees);
+  const [attendanceRecords, setAttendanceRecords] = useStickyState<AttendanceRecord[]>('pc_attendance', DEMO_DATA.attendance);
   const [shifts, setShifts] = useStickyState<Shift[]>('pc_shifts', []);
-  const [leaveRequests, setLeaveRequests] = useStickyState<LeaveRequest[]>('pc_leaves', []);
+  const [leaveRequests, setLeaveRequests] = useStickyState<LeaveRequest[]>('pc_leaves', DEMO_DATA.leaveRequests);
   const [companyProfile, setCompanyProfile] = useStickyState<CompanyProfile>('pc_company', INITIAL_COMPANY);
   const [payrollSettings, setPayrollSettings] = useStickyState<PayrollSettings>('pc_payroll', INITIAL_PAYROLL_SETTINGS);
-  const [announcements, setAnnouncements] = useStickyState<Announcement[]>('pc_announcements', []);
-  const [generalRequests, setGeneralRequests] = useStickyState<GeneralRequest[]>('pc_requests', []);
+  const [announcements, setAnnouncements] = useStickyState<Announcement[]>('pc_announcements', DEMO_DATA.announcements);
+  const [generalRequests, setGeneralRequests] = useStickyState<GeneralRequest[]>('pc_requests', DEMO_DATA.generalRequests);
+  const [documents, setDocuments] = useStickyState<CompanyDocument[]>('pc_documents', []);
+  const [events, setEvents] = useStickyState<CompanyEvent[]>('pc_events', []);
   
   // UI State (Non-persistent mostly)
   const [language, setLanguage] = useState<Language>('en');
@@ -235,6 +332,24 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     addNotification(`Request ${status}.`, status === 'Approved' ? 'success' : 'info');
   };
 
+  const addDocument = (doc: CompanyDocument) => {
+      setDocuments(prev => [doc, ...prev]);
+      addNotification("Document shared successfully.", "success");
+  };
+
+  const updateDocument = (id: string, updates: Partial<CompanyDocument>) => {
+      setDocuments(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+  };
+
+  const addEvent = (evt: CompanyEvent) => {
+      setEvents(prev => [...prev, evt]);
+      addNotification("Event created.", "success");
+  };
+
+  const deleteEvent = (id: string) => {
+      setEvents(prev => prev.filter(e => e.id !== id));
+  };
+
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   // --- NOTIFICATIONS ---
@@ -252,6 +367,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const login = (email: string, role: UserRole) => {
     // Find employee linked to this email (Simulated)
     const emp = employees.find(e => e.email === email);
+    
+    // Fallback for first time setup or if demo data is missing
     const user: User = {
       id: emp ? emp.id : 'ADMIN-001',
       name: emp ? emp.name : 'System Admin',
@@ -284,7 +401,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       payrollSettings, updatePayrollSettings,
       announcements, addAnnouncement,
       generalRequests, addGeneralRequest, updateGeneralRequestStatus,
-      updateOnboardingStep,
+      updateOnboardingStep, documents, addDocument, updateDocument,
+      events, addEvent, deleteEvent,
       language, setLanguage, t: translations[language],
       theme, toggleTheme,
       notifications, addNotification, removeNotification,

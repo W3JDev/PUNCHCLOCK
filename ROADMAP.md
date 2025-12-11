@@ -1,59 +1,51 @@
+
 # 🚀 Product Roadmap: PUNCH⏰CLOCK Malaysia
 
-## 🗓️ Pre-Launch Phase (Immediate Actions)
+## ✅ Completed (v2.2 - Current Release)
 
-These items are critical blockers for a production release.
+*   **User Interface**
+    *   [x] **Neo-Brutalist Design System:** High contrast, accessible, modern UI.
+    *   [x] **Bento Grid Dashboard:** Fully customizable drag-and-drop widget layout.
+    *   [x] **Dark Mode:** System-wide dark/light theme toggle.
 
-*   **Infrastructure & Data**
-    *   [ ] **Migrate to Persistent DB:** Replace in-memory Context API with Supabase or Firebase.
-    *   [ ] **Secure Auth:** Implement JWT-based authentication. Remove debug role switcher.
-    *   [ ] **Backend Proxy:** Create a Node.js/Edge function layer to handle Gemini API requests securely (hide `API_KEY`).
+*   **Core Functionality**
+    *   [x] **Statutory Payroll:** Auto-calculation of EPF, SOCSO, EIS, and PCB.
+    *   [x] **Biometric Kiosk:** Face detection integration via `face-api.js`.
+    *   [x] **Anti-Spoofing:** GPS Geofencing and emulator detection.
+    *   [x] **Org Chart:** Interactive visual hierarchy of employees.
 
-*   **Compliance & Logic**
-    *   [ ] **Real Face ID:** Integrate `face-api.js` or AWS Rekognition for actual identity verification.
-    *   [ ] **PCB Accuracy:** Update tax logic to use the official LHDN MT5 computerized calculation method.
-    *   [ ] **Bank File Verification:** Test generated KWSP/SOCSO text files with actual bank test portals (Maybank2u/CIMB BizChannel).
-
----
-
-## 🗺️ Short-Term Roadmap (Q3 2025)
-
-Focus: Stability and Mobile Experience.
-
-*   **Mobile App Wrapper**
-    *   Wrap PWA in Capacitor/React Native for native store deployment (Play Store/App Store).
-    *   Access native geofencing and background location services.
-
-*   **Notification System**
-    *   Implement WhatsApp integration (via Twilio/Meta API) for:
-        *   "Late" alerts to managers.
-        *   Payslip distribution to staff.
-        *   OTP login.
-
-*   **Rostering 2.0**
-    *   Shift swapping marketplace (Staff can trade shifts with Manager approval).
-    *   Open shift bidding.
+*   **AI Integration**
+    *   [x] **Adaptive Agent:** AI learns user preferences over time.
+    *   [x] **Visual Responses:** AI can generate charts and tables on demand.
+    *   [x] **Compliance Audit:** Auto-scan for Employment Act 1955 violations.
+    *   [x] **Auto-Rostering:** AI generates shift schedules based on business type.
+    *   [x] **SOS Handler:** AI recommends replacements for no-shows.
+    *   [x] **Document Drafter:** AI writes contracts and warning letters.
 
 ---
 
-## 🔭 Medium-Term Roadmap (Q4 2025)
+## 🚧 In Progress (v2.5 - Hardening)
 
-Focus: Financial Integration & Automation.
+*   **Data Layer**
+    *   [ ] **Cloud Sync:** Replace LocalStorage with Supabase (PostgreSQL) for multi-device sync.
+    *   [ ] **Secure Auth:** Implement JWT-based login/session management.
 
-*   **E-Wallet Disbursal**
-    *   Integration with TNG eWallet / GrabPay for daily salary payout (Earned Wage Access).
-
-*   **AI Recruiting Agent**
-    *   Extend Gemini integration to screen resumes and schedule interviews automatically.
-    *   Generate onboarding contracts instantly upon candidate acceptance.
-
-*   **IoT Hardware**
-    *   Support for thermal printers (Bluetooth) for physical shift receipts at Kiosk.
+*   **Mobile**
+    *   [ ] **PWA Push Notifications:** Enable Service Worker push API for shift reminders.
+    *   [ ] **Native Wrapper:** Capacitor build for Play Store deployment.
 
 ---
 
-## 🌟 Nice-to-Have (Long Term)
+## 🔭 Future Horizons (v3.0+)
 
-*   **Sentiment Analysis:** Analyze staff communication (anonymous feedback) to predict turnover risk.
-*   **Multi-Tenant SaaS:** Refactor architecture to support multiple companies on a single deployment.
-*   **Offline-First Sync:** Use PouchDB/RxDB for full offline kiosk capability with sync-upon-reconnect.
+### 📱 The "Super App" Vision
+*   **Earned Wage Access (EWA):** Integration with TNG eWallet for daily salary withdrawal.
+*   **WhatsApp Bot:** Full 2-way communication via WhatsApp (Apply leave via chat).
+
+### 🧠 Advanced AI
+*   **Predictive Analytics:** Forecast staff turnover risk based on attendance patterns.
+*   **Sentiment Analysis:** Analyze staff feedback and morale.
+
+### 🏢 Enterprise
+*   **Multi-Tenant SaaS:** Support for payroll outsourcing firms managing multiple companies.
+*   **Hardware Integration:** Support for thermal receipt printers for physical shift clock-ins.

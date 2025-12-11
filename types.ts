@@ -6,8 +6,42 @@ export interface CompanyProfile {
   phone: string;
   email: string;
   website: string;
-  logoUrl?: string; // Base64 string for the image
+  logoUrl?: string; // Base64
+  letterheadUrl?: string; // Base64 for document background
   leavePolicies?: LeavePolicy[];
+  policies?: string; // Markdown text for general handbook
+  businessType?: 'Corporate' | 'F&B' | 'Retail' | 'Healthcare' | 'Logistics' | 'Technology'; // New: AI Context
+  operatingHours?: { start: string; end: string }; // New: For auto-rostering
+}
+
+export interface CompanyEvent {
+  id: string;
+  title: string;
+  date: string;
+  description: string;
+  imageUrl?: string; // Base64
+  type: 'Meeting' | 'Celebration' | 'Holiday' | 'Training';
+}
+
+export type DocumentCategory = 'Recruitment' | 'Onboarding' | 'Policy' | 'Performance' | 'Disciplinary' | 'Offboarding' | 'Payroll';
+
+export interface CompanyDocument {
+  id: string;
+  title: string;
+  category: DocumentCategory; // New: Lifecycle stage
+  type: 'Contract' | 'Policy' | 'Memo' | 'Payslip' | 'Letter' | 'Form';
+  url?: string; // Optional if content is generated
+  content?: string; // New: HTML/Text content for system-generated docs
+  assignedTo: string; // Employee ID or 'ALL' or 'ROLE:Manager'
+  assignedBy: string;
+  dateUploaded: string;
+  status: 'Pending' | 'Signed' | 'Read';
+  signature?: string; // Base64 signature image or text
+  signedDate?: string; // ISO Date string
+  isRecurring?: boolean; // New: For annual renewals
+  recurrenceInterval?: 'Monthly' | 'Yearly'; // New
+  expiryDate?: string; // New: When the document expires/needs renewal
+  requiresAcknowledgment?: boolean;
 }
 
 export interface LeavePolicy {
@@ -57,14 +91,19 @@ export interface GeneralRequest {
   attachment?: string; // For documents
 }
 
+export type EmploymentType = 'Permanent' | 'Contract' | 'Intern' | 'External';
+
 export interface Employee {
   id: string;
   name: string;
   nric?: string; 
   role: string;
   department: string;
+  employmentType: EmploymentType; // Added for contract mgmt
+  contractEnd?: string; // For contractors
   status: 'Active' | 'On Leave' | 'MIA' | 'Terminated';
   baseSalary: number;
+  hourlyRate?: number; // For part-timers/external
   joinDate: string;
   epfNo?: string;
   socsoNo?: string;
@@ -73,7 +112,7 @@ export interface Employee {
   bankName?: string;
   email?: string;
   faceRegistered?: boolean;
-  faceDescriptor?: number[]; // Added for Real Biometrics
+  faceDescriptor?: number[]; 
   skills?: string[];
   reportsTo?: string; 
   onboardingStep?: number; 
@@ -97,8 +136,10 @@ export interface AttendanceRecord {
   checkOut: string | null;
   location: { lat: number; lng: number; accuracy?: number } | null;
   method: 'QR' | 'Face' | 'PIN';
-  status: 'Present' | 'Late' | 'Absent';
+  status: 'Present' | 'Late' | 'Absent' | 'Leave' | 'Rest Day';
   riskScore?: number; 
+  lateMinutes?: number; // Computed
+  otMinutes?: number; // Computed
 }
 
 export interface PayrollEntry {
@@ -106,6 +147,7 @@ export interface PayrollEntry {
   name: string;
   role: string;
   department: string;
+  employmentType: EmploymentType;
   month: string;
   
   // Breakdown
@@ -130,6 +172,7 @@ export interface PayrollEntry {
   socso: number;
   eis: number;
   pcb: number; 
+  lateDeduction: number; // New: Penalty
   
   netSalary: number;
   status: 'PAID' | 'PENDING';
@@ -146,6 +189,7 @@ export interface Shift {
   isOvertime?: boolean;
   overtimeHours?: number;
   approvalStatus?: 'Approved' | 'Pending' | 'Rejected';
+  notes?: string; // New field for AI reasoning
 }
 
 export enum ComplianceRisk {

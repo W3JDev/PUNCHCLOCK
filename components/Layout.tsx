@@ -18,7 +18,9 @@ import {
   BookOpen,
   Sun,
   Moon,
-  HelpCircle
+  HelpCircle,
+  Building,
+  FileText
 } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { UserRole } from '../types';
@@ -83,6 +85,8 @@ const NAV_CONFIG = [
   { to: "/shifts", icon: CalendarDays, label: "Schedule", roles: ['Admin', 'HR', 'Manager', 'Staff'], color: "bg-green-500" },
   { to: "/payroll", icon: Banknote, label: "Payroll", roles: ['Admin', 'HR'], color: "bg-yellow-500" },
   { to: "/compliance", icon: ShieldAlert, label: "Compliance", roles: ['Admin', 'HR'], color: "bg-red-500" },
+  { to: "/documents", icon: FileText, label: "Documents", roles: ['Admin', 'HR', 'Manager', 'Staff'], color: "bg-teal-500" },
+  { to: "/organization", icon: Building, label: "Organization", roles: ['Admin', 'HR'], color: "bg-indigo-500" },
   { to: "/onboarding", icon: BookOpen, label: "Onboarding", roles: ['Staff'], color: "bg-pink-500" },
 ];
 

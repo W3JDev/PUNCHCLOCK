@@ -1,171 +1,103 @@
-# PUNCH⏰CLOCK Malaysia - Technical Documentation
 
-## 1. Project Overview
+# PUNCH⏰CLOCK Malaysia - Technical Architecture v2.2
 
-**PUNCH⏰CLOCK** is a "Neo-Brutalist" HR Management System (HRMS) Progressive Web App (PWA) tailored specifically for Malaysian SMEs.
+## 1. System Overview
 
-### Value Proposition
-*   **Localized Compliance:** Built-in logic for Malaysian statutory bodies (KWSP/EPF, SOCSO/PERKESO, LHDN/PCB) and the Employment Act 1955.
-*   **AI-First:** Google Gemini integration for "Live" voice assistance, automated compliance auditing, and legal document generation.
-*   **Hardware-Agnostic:** Transforms standard tablets/webcams into biometric attendance kiosks with anti-spoofing measures.
-
-### User Roles
-1.  **Admin:** Full system access, configuration, and sensitive data management.
-2.  **HR Manager:** Payroll processing, compliance auditing, employee management.
-3.  **Line Manager:** Shift scheduling, OT approvals, attendance monitoring.
-4.  **Staff:** Self-service (check-in/out, view payslips, onboarding).
+**PUNCH⏰CLOCK** is a client-side heavy Progressive Web App (PWA) designed to function as a complete HR Operating System. Version 2.2 introduces an "Agentic" architecture where the AI actively plans workforce logistics, generates legal content, and audits compliance.
 
 ---
 
-## 2. System Architecture
+## 2. Core Architecture: The "Sticky State" Engine
 
-**Type:** Single Page Application (SPA) / Progressive Web App (PWA).  
-**Current State:** Client-Side Simulation (Demo Profile).
+Instead of a traditional database for this demo version, we utilize a custom `useStickyState` hook pattern. This provides **Database-like Persistence** completely within the browser's Local Storage.
 
-### High-Level Diagram
+### Data Topology
 ```text
-[User Device (Browser/PWA)]
+[GlobalContext Provider]
       │
-      ├── React Router (Navigation)
+      ├── [Employees State] <====> localStorage('pc_employees')
       │
-      ├── GlobalContext (State Management - In-Memory DB)
-      │      ├── Employees
-      │      ├── Attendance Records
-      │      ├── Shifts
-      │      └── Payroll Settings
+      ├── [Attendance State] <===> localStorage('pc_attendance')
       │
-      ├── Services Layer
-      │      ├── GeminiService <-----> [Google Gemini API (Flash 2.5 / Live)]
-      │      ├── SecurityService (Geo/Bio Logic)
-      │      ├── ComplianceService (Statutory Calculations)
-      │      └── DocumentService (PDF Generation)
+      ├── [Shifts State] <=======> localStorage('pc_shifts')
       │
-      └── UI Layer (Neo-Brutalist Components)
+      ├── [Documents State] <====> localStorage('pc_documents')
+      │
+      ├── [Company Profile] <====> localStorage('pc_company')
+      │
+      └── [Payroll Settings] <===> localStorage('pc_payroll')
 ```
 
----
-
-## 3. Tech Stack
-
-### Languages & Frameworks
-*   **Core:** React 19, TypeScript.
-*   **Build Tool:** Vite.
-*   **Styling:** Tailwind CSS (Custom "Neo-Brutalist" config).
-*   **State:** React Context API + Hooks.
-*   **Routing:** React Router DOM v7.
-
-### External Integrations
-*   **AI/LLM:** Google GenAI SDK (`@google/genai` v1.30.0).
-    *   *Models:* `gemini-2.5-flash` (Text/Audit), `gemini-2.5-flash-native-audio-preview-09-2025` (Live Voice).
-*   **PDF Generation:** `jsPDF`.
-*   **Visualization:** `recharts`.
-*   **Icons:** `lucide-react`.
-
-### Data Persistence
-*   **Current:** In-Memory (Volatile). Resets on page reload.
-*   **Assumption:** Future iterations will connect to a BAAS (Firebase/Supabase) or REST API.
+**Benefit:** The app retains state even after a hard refresh, simulating a production environment without backend latency.
 
 ---
 
-## 4. Module Design
+## 3. Feature Deep Dive
 
-### A. Attendance & Smart Kiosk
-*   **Purpose:** Biometric time tracking.
-*   **Key Files:** `pages/Attendance.tsx`, `services/securityService.ts`.
-*   **Key Logic:**
-    *   **Anti-Spoofing:** Checks GPS accuracy (rejects perfect integers common in emulators) and Haversine distance from office.
-    *   **Liveness:** Random challenges ("Blink twice") - *Simulated in current build*.
-    *   **Risk Scoring:** Assigns 0-100 score based on location, time, and previous patterns.
+### A. The "Bento" Grid Engine (`Dashboard.tsx`)
+*   **Logic:** Uses a dynamic array `layout: DashboardWidget[]`.
+*   **Interaction:** Implements HTML5 Drag and Drop API (`onDragStart`, `onDragEnter`, `onDragEnd`).
+*   **Swapping Algorithm:** Real-time array slicing and reordering persisted to `localStorage`.
 
-### B. Payroll Engine
-*   **Purpose:** Salary calculation and statutory file generation.
-*   **Key Files:** `pages/Payroll.tsx`, `services/complianceService.ts`.
-*   **Key Logic:**
-    *   **Calculations:** `Gross = Basic + Allowances + OT`. `Net = Gross - (EPF + SOCSO + EIS + PCB)`.
-    *   **Exports:** Generates `.txt` files mimicking formats for KWSP (Form A), SOCSO, and LHDN (CP39).
-    *   **PDFs:** Client-side generation of payslips using `jspdf`.
+### B. Adaptive AI Assistant (`geminiService.ts`)
+*   **Context Injection:** The prompt sent to Gemini is dynamically constructed at runtime, injecting current User Role, Employee List subset, and recent Attendance logs.
+*   **Visual Output:** The AI outputs special tokens like `[VISUAL: PAYROLL_CHART]` which the frontend parses to render Recharts components.
 
-### C. Compliance & Legal AI
-*   **Purpose:** Automated auditing and document generation.
-*   **Key Files:** `pages/Compliance.tsx`, `services/geminiService.ts`.
-*   **Key Logic:**
-    *   **Audit:** Sends anonymous employee data to Gemini to check against "Knowledge Base" (Employment Act 1955 rules).
-    *   **Docs:** Generates Warning Letters, Contracts, and Probation letters based on prompts.
+### C. AI Workforce Planner (`Shifts.tsx`)
+*   **Auto-Rostering:** 
+    1.  User selects business context (e.g., "F&B").
+    2.  AI receives constraints: Approved Leaves, Role Distribution requirements.
+    3.  AI generates a JSON array of `Shift` objects optimized for coverage.
+*   **SOS Module:**
+    1.  Identifies "No Show".
+    2.  Scans available staff.
+    3.  Filters by `Role === Missing_Role` and sorts by `Accumulated_OT asc`.
 
-### D. AI Assistant (Live)
-*   **Purpose:** Voice-based HR support.
-*   **Key Files:** `components/AiAssistant.tsx`.
-*   **Key Logic:**
-    *   Uses `AudioContext` to capture raw PCM audio (16kHz).
-    *   Streams via WebSocket to Gemini Live API.
-    *   Handles audio output buffering for low-latency response.
+### D. Document Factory (`Documents.tsx`)
+*   **Generation:** Uses Gemini to draft HTML content for contracts/letters based on Employee variables.
+*   **Signing:** HTML5 Canvas based signature pad (`touch-action: none` for mobile support).
+*   **Recurring Logic:** `expiryDate` calculated automatically based on `recurrenceInterval`.
 
----
+### E. Biometric Kiosk (`Attendance.tsx`)
+*   **Mode Logic:** Uses `createPortal` to render a full-screen, isolated scanning interface over the main app.
+*   **User Flow:** Idle Screen -> Select Intent (In/Out/Break) -> Select Method (Face/PIN) -> Scan -> Result.
+*   **Face Recognition:** Uses `face-api.js` (SSD Mobilenet v1).
+*   **Anti-Spoofing:** GPS Geofencing (Haversine Formula) & Liveness Challenges.
 
-## 5. Implementation Status & Feature Matrix
+### F. Statutory Payroll Engine (`Payroll.tsx`)
+*   **PCB Calculation:** Implements the **Monthly Tax Deduction (MTD)** progressive tax rates for Malaysia.
+*   **EPF/SOCSO:** Calculates employer vs employee contributions based on distinct rates defined in `GlobalContext`.
+*   **Bank Export:** String builders generate fixed-width `.txt` files for KWSP/SOCSO/LHDN portals.
 
-| Module | Feature | Status | Notes |
-| :--- | :--- | :--- | :--- |
-| **Auth** | Role Switching | 🟡 Partial | Debug menu only; no real auth/JWT. |
-| **Attendance** | Kiosk UI | 🟢 Complete | |
-| **Attendance** | Face ID | 🟡 Simulated | Uses `setTimeout` mockup; no real Tensor/Face API. |
-| **Attendance** | Geofencing | 🟢 Complete | Haversine logic implemented. |
-| **Payroll** | Calculations | 🟢 Complete | Standard formulas implemented. |
-| **Payroll** | Bank Files | 🟡 Partial | Txt format is simplified, not bank-spec compliant. |
-| **Compliance** | AI Audit | 🟢 Complete | |
-| **Compliance** | PDF Gen | 🟢 Complete | |
-| **Shifts** | Rostering | 🟢 Complete | |
-| **AI** | Live Voice | 🟢 Complete | Works via Gemini Live API. |
+### G. Organization & Branding (`Organization.tsx`)
+*   **Branding:** Allows Admin to upload Logo and Letterhead images (stored as Base64 strings) which are dynamically injected into PDF headers for Payslips and Contracts.
+*   **Event Management:** CRUD operations for Company Events, which are fed into the Dashboard "Bulletin" widget.
+*   **Policy Editor:** AI-powered text generation to expand the Employee Handbook.
 
 ---
 
-## 6. Bugs, Issues, and Technical Debt
+## 4. Security & Compliance
 
-### Priority: Critical (S)
-1.  **Data Persistence:**
-    *   *Issue:* All data (employees, attendance, payroll) is stored in `GlobalContext` state. Refreshing the browser resets the app to `INITIAL_EMPLOYEES`.
-    *   *Estimate:* L (Requires backend/DB integration).
-2.  **API Key Exposure:**
-    *   *Issue:* `process.env.API_KEY` is used in client-side code. In a production build, this would be exposed to the user.
-    *   *Fix:* Move AI calls to a server-side proxy (Next.js API route or Express).
-    *   *Estimate:* M.
-
-### Priority: High (M)
-1.  **Biometric Security:**
-    *   *Issue:* Face ID is currently a UI simulation (`setTimeout`). It does not actually verify the user's identity.
-    *   *Fix:* Integrate `face-api.js` or a cloud-based biometric provider.
-    *   *Estimate:* L.
-2.  **Audio Compatibility:**
-    *   *Issue:* The Live API implementation uses `AudioContext` and `ScriptProcessorNode` (deprecated) or `AudioWorklet`. Browser compatibility (Safari vs Chrome) for raw PCM streaming is fragile.
-    *   *Estimate:* M.
-
-### Priority: Medium (M)
-1.  **Payroll Formulas:**
-    *   *Issue:* PCB (Tax) calculation is a flat 5% simplification. Real LHDN formulas are complex tiered tables.
-    *   *Estimate:* M.
-2.  **Bank File Formats:**
-    *   *Issue:* The generated `.txt` files for KWSP/SOCSO are illustrative. Real banking portals require exact byte-aligned positioning.
-    *   *Estimate:* S.
+| Layer | Implementation | Purpose |
+| :--- | :--- | :--- |
+| **Data** | LocalStorage | Data never leaves the device (Privacy First). |
+| **AI** | Context Windowing | Only relevant/anonymized snippets sent to LLM. |
+| **Labor Law** | Logic Gates | Code checks `OT Hours > 104` to flag EA 1955 violations. |
+| **Access** | RBAC | Role-based rendering prevents Staff from seeing Payroll. |
 
 ---
 
-## 7. Testing Strategy (Recommended)
+## 5. Automation Flows
 
-*   **Unit Tests:**
-    *   `services/complianceService.ts`: Verify statutory math (EPF 11%, SOCSO tiers).
-    *   `services/securityService.ts`: Verify Haversine distance and spoof detection.
-*   **Integration Tests:**
-    *   Payroll Flow: Ensure attendance data correctly flows into overtime calculations in the payroll engine.
-*   **E2E Tests:**
-    *   Kiosk Flow: Test camera permission prompts and check-in success states.
+1.  **Onboarding:** New Hire -> Face Enrollment -> Auto-generate Contract -> Document Signed.
+2.  **Daily Ops:** Biometric Check-in -> Risk Score Calc -> Dashboard Update.
+3.  **Scheduling:** AI Auto-Roster -> SOS Handling -> Compliance Check.
+4.  **Month End:** Auto-compile Attendance -> Calculate OT/Late -> Generate Payslip -> Export Bank File.
 
 ---
 
-## 8. Pre-Launch Checklist
+## 6. Future Implementations (v3.0)
 
-1.  [ ] **Database:** Migrate `GlobalContext` state to a real database (Postgres/Firebase).
-2.  [ ] **Authentication:** Implement true login (Auth0/Firebase Auth) to replace role switcher.
-3.  [ ] **Face ID:** Replace biometric simulation with actual facial recognition library.
-4.  [ ] **Statutory Validation:** Validate payroll output against official LHDN calculators.
-5.  [ ] **Security:** Move Gemini API calls to a backend proxy to hide API keys.
-6.  [ ] **PWA Assets:** Generate valid icons and splash screens for `manifest.json`.
+*   **Server-Side:** Migrate `GlobalContext` to Supabase/PostgreSQL.
+*   **Edge Functions:** Move Gemini calls to backend to hide API keys.
+*   **WhatsApp API:** Push notifications for payslips and attendance alerts.
