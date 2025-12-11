@@ -1,0 +1,63 @@
+name: 🔬 Vercel Monitor & Auto-Fix
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Vercel
+        run: sleep 90
+
+      - name: Check Deployment
+        id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "status=unknown" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          RESPONSE=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=1")
+          STATUS=$(echo $RESPONSE | jq -r '.deployments[0].readyState')
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          if [ "$STATUS" = "ERROR" ]; then exit 1; fi
+
+      - name: Auto-Fix Build Errors
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            try {
+              execSync('npm install');
+              execSync('npm run build');
+            } catch (error) {
+              const errorOutput = error.stdout?.toString() || '';
+              if (errorOutput.includes('TS1382')) {
+                const files = execSync('find components -name "*.tsx"').toString().split('\n').filter(Boolean);
+                for (const file of files) {
+                  let content = fs.readFileSync(file, 'utf8');
+                  const fixed = content.replace(/([^-<>=!])>([^=>])/g, "$1&gt;$2");
+                  if (fixed !== content) {
+                    fs.writeFileSync(file, fixed);
+                  }
+                }
+                execSync('git config user.name "AI Healing Bot"');
+                execSync('git config user.email "ai@github-actions"');
+                execSync('git add -A');
+                execSync('git commit -m "AI: Auto-fix build errors"');
+                execSync('git push');
+              }
+            }
