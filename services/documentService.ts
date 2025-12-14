@@ -13,6 +13,18 @@ const addWrappedText = (doc: any, text: string, x: number, y: number, maxWidth: 
   return y + (splitText.length * lineHeight);
 };
 
+// Helper for Footer
+const addW3jDevFooter = (doc: any, pageHeight: number, margin: number) => {
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text("Generated with PUNCHCLOCK by w3jdev.com", margin, pageHeight - 10);
+        doc.setTextColor(0); // Reset
+    }
+};
+
 export const generateProfessionalPDF = (
   type: 'Warning' | 'Contract' | 'Probation',
   company: CompanyProfile,
@@ -301,6 +313,7 @@ export const generateProfessionalPDF = (
       doc.text(`Date: ______________`, MARGIN + 100, y);
   }
 
+  addW3jDevFooter(doc, PAGE_HEIGHT, MARGIN);
   return doc.output('bloburl');
 };
 
@@ -458,5 +471,6 @@ export const generatePayslipPDF = (
   doc.text("NET PAY", MARGIN + 5, y + 11);
   doc.text(`RM ${entry.netSalary.toLocaleString('en-MY', {minimumFractionDigits: 2})}`, 185, y + 11, { align: "right" });
 
+  addW3jDevFooter(doc, PAGE_HEIGHT, MARGIN);
   return doc.output('bloburl');
 };

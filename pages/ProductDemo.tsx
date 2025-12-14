@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,7 +14,9 @@ import {
   Fingerprint,
   FileText,
   Bot,
-  User
+  User,
+  Github,
+  Linkedin
 } from 'lucide-react';
 
 export const ProductDemo: React.FC = () => {
@@ -332,11 +335,12 @@ export const ProductDemo: React.FC = () => {
                  <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-black italic">P.</div>
                  <span className="font-bold tracking-tight">PUNCHCLOCK MALAYSIA</span>
               </div>
-              <p className="text-gray-500 text-sm font-medium">© 2025 MN Jewel Sdn Bhd. All rights reserved.</p>
-              <div className="flex gap-6 text-sm font-bold text-gray-400">
+              <p className="text-gray-500 text-sm font-medium">© 2025 MN Jewel Sdn Bhd. Powered by <a href="https://w3jdev.com" className="text-white hover:underline">PUNCHCLOCK (w3jdev)</a>.</p>
+              <div className="flex gap-6 text-sm font-bold text-gray-400 items-center">
                   <a href="#" className="hover:text-white">Privacy</a>
                   <a href="#" className="hover:text-white">Terms</a>
-                  <a href="#" className="hover:text-white">Support</a>
+                  <a href="https://github.com/w3jdev" target="_blank" rel="noopener noreferrer" className="hover:text-white"><Github className="w-4 h-4"/></a>
+                  <a href="https://linkedin.com/in/w3jdev" target="_blank" rel="noopener noreferrer" className="hover:text-white"><Linkedin className="w-4 h-4"/></a>
               </div>
           </div>
       </footer>

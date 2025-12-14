@@ -470,7 +470,7 @@ export const AiAssistant: React.FC = () => {
                   <div className="flex-1 overflow-y-auto relative">{renderDataDeck()}</div>
                   <div className="p-6 border-t border-white/10 bg-[#0a0a0a] flex justify-between items-center text-xs font-mono">
                       <span className="text-gray-500">POWERED BY GEMINI 2.5</span>
-                      <span className="text-[#FFD700] font-bold">MADE BY W3JDEV</span>
+                      <a href="https://w3jdev.com" target="_blank" rel="noopener noreferrer" className="text-[#FFD700] font-bold hover:underline">MADE BY W3JDEV</a>
                   </div>
               </div>
               <button onClick={() => setIsImmersive(false)} className="absolute top-4 right-4 md:hidden bg-red-600 text-white p-2 rounded-full z-50"><X className="w-6 h-6"/></button>

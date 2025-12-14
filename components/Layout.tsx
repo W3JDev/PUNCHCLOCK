@@ -20,7 +20,10 @@ import {
   Moon,
   HelpCircle,
   Building,
-  FileText
+  FileText,
+  Github,
+  Linkedin,
+  Globe
 } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { UserRole } from '../types';
@@ -145,7 +148,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
                <Command className="w-5 h-5" />
              </div>
-             <h1 className="text-lg font-black italic tracking-tighter text-black dark:text-white">PUNCH<span className="text-blue-500">CLOCK</span></h1>
+             <div>
+                <h1 className="text-lg font-black italic tracking-tighter text-black dark:text-white leading-none">PUNCH<span className="text-blue-500">CLOCK</span></h1>
+                <a href="https://w3jdev.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block leading-none">by w3jdev</a>
+             </div>
          </div>
          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 border border-white/20 rounded-lg text-black dark:text-white">
             <Menu className="w-6 h-6" />
@@ -187,6 +193,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                    <h1 className="text-xl font-black italic tracking-tighter text-black dark:text-white leading-none">
                      PUNCH<span className="text-blue-600">.</span><br/>CLOCK
                    </h1>
+                   <a href="https://w3jdev.com" target="_blank" rel="noopener noreferrer" className="block text-[10px] font-bold text-gray-500 hover:text-blue-500 transition-colors uppercase tracking-widest mt-1">by w3jdev</a>
                  </div>
                )}
           </div>
@@ -233,6 +240,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
              </div>
              
              {!isCollapsed && (
+               <>
                <div className="flex gap-2 mt-4">
                  <button 
                    onClick={toggleTheme}
@@ -249,6 +257,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                    <LogOut className="w-4 h-4" /> {t.logout}
                  </button>
                </div>
+               
+               <div className="mt-4 flex justify-between items-center px-1">
+                   <a href="https://w3jdev.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-gray-500 hover:text-white transition-colors">© {new Date().getFullYear()} w3jdev</a>
+                   <div className="flex gap-2">
+                       <a href="https://github.com/w3jdev" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Github className="w-3 h-3"/></a>
+                       <a href="https://linkedin.com/in/w3jdev" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Linkedin className="w-3 h-3"/></a>
+                   </div>
+               </div>
+               </>
              )}
           </div>
       </aside>
