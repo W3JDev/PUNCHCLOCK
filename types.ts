@@ -111,6 +111,7 @@ export interface Employee {
   bankAccount?: string;
   bankName?: string;
   email?: string;
+  pin?: string; // New: Secure 6-digit PIN
   faceRegistered?: boolean;
   faceDescriptor?: number[]; 
   skills?: string[];

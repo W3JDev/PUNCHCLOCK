@@ -90,6 +90,9 @@ const generateDemoData = () => {
       if (i === 2) email = 'manager@mnjewel.com';
       if (i === 3) email = 'staff@mnjewel.com';
 
+      // Generate a stable PIN for demo (e.g., 123456 or based on ID)
+      const demoPin = (100000 + i).toString();
+
       generatedEmployees.push({
           id: `EMP-${1000 + i}`,
           name: `${fName} ${lName}`,
@@ -104,7 +107,8 @@ const generateDemoData = () => {
           faceRegistered: i % 3 === 0, // Some haven't registered
           reportsTo: isManager ? '' : `EMP-100${i % 5}`, // Distribute among first 5
           onboardingStep: 4,
-          email: email
+          email: email,
+          pin: demoPin // Generated PIN
       });
   }
 
