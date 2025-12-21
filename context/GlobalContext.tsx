@@ -22,6 +22,7 @@ interface GlobalContextType {
   generalRequests: GeneralRequest[];
   documents: CompanyDocument[];
   events: CompanyEvent[];
+  userPreferences: Record<string, number>;
   
   // Actions
   addEmployee: (emp: Employee) => void;
@@ -44,6 +45,7 @@ interface GlobalContextType {
   updateDocument: (id: string, updates: Partial<CompanyDocument>) => void;
   addEvent: (evt: CompanyEvent) => void;
   deleteEvent: (id: string) => void;
+  logInteraction: (topic: string) => void;
 
   // UI/State
   language: Language;
@@ -259,6 +261,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [generalRequests, setGeneralRequests] = useStickyState<GeneralRequest[]>('pc_requests', DEMO_DATA.generalRequests);
   const [documents, setDocuments] = useStickyState<CompanyDocument[]>('pc_documents', []);
   const [events, setEvents] = useStickyState<CompanyEvent[]>('pc_events', []);
+  const [userPreferences, setUserPreferences] = useStickyState<Record<string, number>>('pc_user_prefs', {});
   
   // UI State (Non-persistent mostly)
   const [language, setLanguage] = useState<Language>('en');
@@ -272,6 +275,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   // --- ACTIONS ---
+
+  const logInteraction = (topic: string) => {
+    setUserPreferences(prev => ({
+      ...prev,
+      [topic]: (prev[topic] || 0) + 1
+    }));
+  };
 
   const addEmployee = (emp: Employee) => {
     setEmployees(prev => [...prev, emp]);
@@ -377,7 +387,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       id: emp ? emp.id : 'ADMIN-001',
       name: emp ? emp.name : 'System Admin',
       role: role,
-      avatar: `https://ui-avatars.com/api/?name=${emp ? emp.name : 'Admin'}&background=random`
+      avatar: `https://ui-avatars.com/api/?name=${emp ? emp.name : 'Admin'}&background=random`,
+      preferences: {
+          aiInteractions: {}
+      }
     };
     setCurrentUser(user);
     window.localStorage.setItem('pc_user', JSON.stringify(user));
@@ -407,6 +420,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       generalRequests, addGeneralRequest, updateGeneralRequestStatus,
       updateOnboardingStep, documents, addDocument, updateDocument,
       events, addEvent, deleteEvent,
+      userPreferences, logInteraction,
       language, setLanguage, t: translations[language],
       theme, toggleTheme,
       notifications, addNotification, removeNotification,

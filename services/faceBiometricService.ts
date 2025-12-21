@@ -45,7 +45,7 @@ export const initializeFaceMatcher = (employees: Employee[]) => {
         });
 
     if (labeledDescriptors.length > 0) {
-        // 0.6 is the standard distance threshold
+        // 0.5 is a strict distance threshold to prevent false positives
         faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5); 
         console.log(`Biometric Index Rebuilt: ${labeledDescriptors.length} subjects.`);
     }
@@ -81,6 +81,22 @@ export const matchFaceFast = (descriptor: Float32Array): { match: any, distance:
     }
 
     return { match: { id: bestMatch.label }, distance: bestMatch.distance };
+};
+
+/**
+ * Security Check: Verifies if a detected face matches someone other than the current target.
+ * Used during enrollment to prevent duplicate face ID usage across the system.
+ */
+export const findDuplicateFace = (descriptor: Float32Array, currentEmployeeId?: string): { isDuplicate: boolean, matchedId?: string } => {
+    if (!faceMatcher) return { isDuplicate: false };
+    
+    const bestMatch = faceMatcher.findBestMatch(descriptor);
+    
+    if (bestMatch.label !== 'unknown' && bestMatch.label !== currentEmployeeId) {
+        return { isDuplicate: true, matchedId: bestMatch.label };
+    }
+    
+    return { isDuplicate: false };
 };
 
 /**

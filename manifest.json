@@ -1,16 +1,16 @@
+
 {
   "name": "PUNCH⏰CLOCK Malaysia",
   "short_name": "PUNCHCLOCK",
-  "description": "Next-Gen HR Attendance & Payroll System tailored for Malaysian SMEs. Features AI-powered compliance, automated statutory calculations (EPF/SOCSO), and neo-brutalist design.",
+  "description": "Next-Gen HR Operating System. AI-powered attendance, payroll, and compliance for Malaysian SMEs.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "categories": [
     "business",
     "productivity",
-    "utilities",
     "finance"
   ],
   "icons": [
@@ -24,20 +24,37 @@
       "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80",
+      "sizes": "800x600",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Dashboard Overview"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80",
+      "sizes": "400x800",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Mobile Kiosk Mode"
     }
   ],
   "shortcuts": [
     {
-      "name": "Smart Kiosk",
+      "name": "Clock In",
       "url": "/attendance",
-      "description": "Launch Attendance Kiosk"
+      "description": "Launch Biometric Kiosk",
+      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", "sizes": "96x96" }]
     },
     {
-      "name": "Dashboard",
-      "url": "/",
-      "description": "View HR Dashboard"
+      "name": "View Payslip",
+      "url": "/payroll",
+      "description": "Check Salary",
+      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", "sizes": "96x96" }]
     }
-  ],
-  "screenshots": []
+  ]
 }

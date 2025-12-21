@@ -4,7 +4,6 @@ import { Bot, X, Send, Sparkles, Mic, MicOff, Maximize2, Minimize2, Command, Use
 import { chatWithHRAssistant } from '../services/geminiService';
 import { ChatMessage } from '../types';
 import { useGlobal } from '../context/GlobalContext';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 
@@ -39,14 +38,8 @@ const POWER_PROMPTS = [
 // High Contrast Colors for Charts
 const COLORS = ['#3B82F6', '#FFD700', '#EF4444', '#10B981'];
 
-// --- MARKDOWN RENDERER COMPONENT ---
-// Updated to accept `isDarkBg` to decouple text color from user role.
 const MessageRenderer: React.FC<{ text: string, isDarkBg: boolean }> = ({ text, isDarkBg }) => {
   const lines = text.split('\n');
-  
-  // Dynamic colors based on container background brightness
-  // isDarkBg=true  => Light Text (For Dark Bubbles)
-  // isDarkBg=false => Dark Text (For White Bubbles)
   const headerColor = isDarkBg ? 'text-blue-400' : 'text-blue-600';
   const boldColor = isDarkBg ? 'text-white' : 'text-black';
   const textColor = isDarkBg ? 'text-gray-300' : 'text-gray-700';
@@ -79,25 +72,18 @@ export const AiAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isImmersive, setIsImmersive] = useState(false);
   
-  // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'model', text: '### SYSTEM ONLINE\nI am your **HR Operations Agent**. I have full access to Payroll, Biometrics, and Legal Statutes.\n\nSelect a **Power Prompt** below to see what I can do.', timestamp: new Date() }
   ]);
   
-  // AI Learning State
-  const [userPreferences, setUserPreferences] = useState<Record<string, number>>({});
-
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Visual/Agentic State
   const [activeVisual, setActiveVisual] = useState<'NONE' | 'PAYROLL_CHART' | 'ATTENDANCE_CHART' | 'STAFF_TABLE' | 'POLICY_DOC'>('NONE');
   
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { employees, attendanceRecords, payrollSettings, currentUser, addNotification, companyProfile, documents, shifts } = useGlobal();
+  const { employees, attendanceRecords, payrollSettings, currentUser, addNotification, companyProfile, documents, shifts, userPreferences, logInteraction } = useGlobal();
   const navigate = useNavigate();
 
-  // --- PERSISTENCE & LEARNING ---
   useEffect(() => {
     const saved = localStorage.getItem('pc_chat_history');
     if (saved) {
@@ -123,17 +109,16 @@ export const AiAssistant: React.FC = () => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isOpen, isImmersive]);
 
-  // --- DATA COMPUTATION FOR VISUALS ---
   const visualData = useMemo(() => {
       const todayStr = new Date().toISOString().split('T')[0];
-      
       const present = attendanceRecords.filter(r => r.date === todayStr && r.status === 'Present').length;
       const late = attendanceRecords.filter(r => r.date === todayStr && r.status === 'Late').length;
-      const absent = employees.filter(e => e.status === 'Active').length - (present + late);
+      const totalActive = employees.filter(e => e.status === 'Active').length;
+      const absent = totalActive - (present + late);
       
-      const totalSalary = employees.reduce((acc, curr) => acc + curr.baseSalary, 0);
+      const totalSalary = employees.reduce((acc, curr) => acc + (curr.baseSalary || 0), 0);
       const estEPF = totalSalary * 0.13;
-      const estOT = totalSalary * 0.08; // Mock OT
+      const estOT = totalSalary * 0.08;
 
       let tableHeaders: string[] = [];
       let tableRows: any[] = [];
@@ -145,7 +130,7 @@ export const AiAssistant: React.FC = () => {
           tableHeaders = ["Name", "Status", "Time", "Risk Score"];
           tableRows = lateRecords.map(r => {
               const emp = employees.find(e => e.id === r.employeeId);
-              return [emp?.name || 'Unknown', r.status, r.checkIn || 'N/A', `${r.riskScore}%`];
+              return [emp?.name || 'Unknown', r.status, r.checkIn || 'N/A', `${r.riskScore || 0}%`];
           });
       } else if (activeVisual === 'PAYROLL_CHART') {
           tableTitle = "Top OT Earners";
@@ -157,7 +142,7 @@ export const AiAssistant: React.FC = () => {
           attendanceChart: [
               { name: 'On Time', value: present },
               { name: 'Late', value: late },
-              { name: 'Absent', value: absent }
+              { name: 'Absent', value: Math.max(0, absent) }
           ],
           payrollChart: [
               { name: 'Basic Wages', amount: totalSalary },
@@ -165,14 +150,17 @@ export const AiAssistant: React.FC = () => {
               { name: 'Overtime', amount: estOT } 
           ],
           tableData: { title: tableTitle, headers: tableHeaders, rows: tableRows },
-          totalStaff: employees.length 
+          totalStaff: totalActive 
       };
   }, [attendanceRecords, employees, activeVisual]);
 
-  // --- TEXT CHAT HANDLER ---
-  const handleSend = async (textOverride?: string) => {
+  const handleSend = async (textOverride?: string, fromSuggestion?: boolean) => {
     const textToSend = textOverride || input;
-    if (!textToSend.trim()) return;
+    if (!textToSend.trim() || !currentUser) return;
+
+    if (fromSuggestion) {
+        logInteraction(textToSend);
+    }
 
     const userMsg: ChatMessage = { role: 'user', text: textToSend, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
@@ -184,14 +172,12 @@ export const AiAssistant: React.FC = () => {
       parts: [{ text: m.text }]
     }));
 
-    if (!currentUser) return;
-
     const response = await chatWithHRAssistant(textToSend, history, {
         currentUser, employees, attendanceRecords, payrollSettings,
         companyProfile, documents, shifts, userPreferences
     });
     
-    setMessages(prev => [...prev, { role: 'model', text: response.text, timestamp: new Date() }]);
+    setMessages(prev => [...prev, { role: 'model', text: response.text, timestamp: new Date(), suggestions: response.suggestions }]);
     
     if (response.intent) {
         setActiveVisual(response.intent as any);
@@ -204,11 +190,9 @@ export const AiAssistant: React.FC = () => {
         setIsImmersive(false);
         if (isOpen) setIsOpen(false);
     }
-
     setIsLoading(false);
   };
 
-  // --- RENDER VISUALS ---
   const renderDataDeck = () => {
       if (activeVisual === 'NONE') {
           return (
@@ -278,7 +262,6 @@ export const AiAssistant: React.FC = () => {
                   </div>
                   <h3 className="text-xl font-black text-white uppercase">{chartTitle}</h3>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                   <div className="p-4 bg-[#1a1a1a] rounded-xl border border-white/10">
                       <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{isPayroll ? 'Proj. Cost' : 'Risk Factor'}</p>
@@ -287,11 +270,10 @@ export const AiAssistant: React.FC = () => {
                   <div className="p-4 bg-[#1a1a1a] rounded-xl border border-white/10">
                       <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{isPayroll ? 'Var. Ratio' : 'Absent Rate'}</p>
                       <p className={`text-2xl font-black ${isPayroll ? 'text-green-500' : 'text-red-500'}`}>
-                          {isPayroll ? '18%' : Math.round((visualData.attendanceChart[2].value / visualData.totalStaff) * 100) + '%'}
+                          {isPayroll ? '18%' : Math.round((visualData.attendanceChart[2].value / Math.max(1, visualData.totalStaff)) * 100) + '%'}
                       </p>
                   </div>
               </div>
-              
               <div className="h-64 w-full border border-white/5 rounded-xl bg-black/20 p-2">
                   <ResponsiveContainer width="100%" height="100%">
                       {isPayroll ? (
@@ -303,25 +285,12 @@ export const AiAssistant: React.FC = () => {
                       ) : (
                           <PieChart>
                               <Pie data={visualData.attendanceChart} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                  {visualData.attendanceChart.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index]} />)}
+                                  {visualData.attendanceChart.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                               </Pie>
                               <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
                           </PieChart>
                       )}
                   </ResponsiveContainer>
-              </div>
-              
-              {/* Contextual Table below chart */}
-              <div className="bg-[#1a1a1a] rounded-xl border border-white/10 p-4">
-                  <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Key Drivers</h4>
-                  <div className="space-y-2 text-xs">
-                      {visualData.tableData.rows?.slice(0,3).map((r, i) => (
-                          <div key={i} className="flex justify-between text-gray-300 border-b border-white/5 pb-1">
-                              <span>{r[0]}</span>
-                              <span className="font-mono">{r[2] || r[3]}</span>
-                          </div>
-                      ))}
-                  </div>
               </div>
           </div>
       );
@@ -330,14 +299,14 @@ export const AiAssistant: React.FC = () => {
   return (
     <>
       {!isOpen && !isImmersive && (
-        <button onClick={() => setIsOpen(true)} className="fixed bottom-8 right-8 bg-[#ef4444] text-white w-16 h-16 rounded-2xl border-2 border-white/20 shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] flex items-center justify-center hover:translate-y-[-2px] hover:shadow-[6px_6px_0_0_rgba(255,255,255,0.2)] transition-all z-50 group">
-          <Bot className="w-8 h-8 group-hover:rotate-12 transition-transform" />
+        <button onClick={() => setIsOpen(true)} className="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-[#ef4444] text-white w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 border-white/20 shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] flex items-center justify-center hover:translate-y-[-2px] hover:shadow-[6px_6px_0_0_rgba(255,255,255,0.2)] transition-all z-50 group">
+          <Bot className="w-6 h-6 md:w-8 md:h-8 group-hover:rotate-12 transition-transform" />
         </button>
       )}
 
       {isOpen && !isImmersive && (
-        <div className="fixed bottom-8 right-8 w-96 h-[700px] bg-[#121212] border-2 border-white/20 shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden animate-in zoom-in-95 origin-bottom-right duration-200">
-          <div className="bg-[#ef4444] p-4 border-b-2 border-white/10 flex justify-between items-center">
+        <div className="fixed bottom-4 right-4 left-4 md:left-auto md:bottom-8 md:right-8 w-auto md:w-96 h-[80vh] md:h-[700px] max-h-[700px] bg-[#121212] border-2 border-white/20 shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden animate-in zoom-in-95 origin-bottom-right duration-200">
+          <div className="bg-[#ef4444] p-4 border-b-2 border-white/10 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-white" />
               <h3 className="font-black text-white text-lg tracking-wide uppercase">AI AGENT</h3>
@@ -348,35 +317,32 @@ export const AiAssistant: React.FC = () => {
                 <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white p-1 rounded"><X className="w-6 h-6"/></button>
             </div>
           </div>
-
           <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a] space-y-4" ref={scrollRef}>
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 rounded-2xl text-sm border ${msg.role === 'user' ? 'bg-blue-600 text-white border-blue-500' : 'bg-[#1a1a1a] text-gray-200 border-white/10'}`}>
-                  {/* POP-OVER MODE: Both AI (bg-1a1a1a) and User (bg-blue-600) have dark backgrounds. Pass true. */}
-                  <MessageRenderer text={msg.text} isDarkBg={true} />
+              <div key={idx} className="space-y-2">
+                <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-2xl text-sm border ${msg.role === 'user' ? 'bg-blue-600 text-white border-blue-500' : 'bg-[#1a1a1a] text-gray-200 border-white/10'}`}>
+                    <MessageRenderer text={msg.text} isDarkBg={true} />
+                  </div>
                 </div>
+                {msg.role === 'model' && msg.suggestions && (
+                    <div className="flex flex-wrap gap-2 justify-start mt-2">
+                        {msg.suggestions.map((s, sIdx) => (
+                            <button 
+                                key={sIdx} 
+                                onClick={() => handleSend(s, true)}
+                                className="px-3 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/5 text-blue-400 text-xs font-bold hover:bg-blue-500/20 transition-all animate-in fade-in"
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                )}
               </div>
             ))}
             {isLoading && <div className="flex justify-start"><div className="bg-[#1a1a1a] p-3 rounded-2xl text-xs text-gray-400 animate-pulse">Running analysis...</div></div>}
           </div>
-
-          <div className="p-4 bg-[#121212] border-t border-white/10 flex flex-col gap-3">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Power Scenarios</p>
-            <div className="grid grid-cols-1 gap-2 mb-2">
-                {POWER_PROMPTS.map((pp, idx) => (
-                    <button 
-                        key={idx} 
-                        onClick={() => handleSend(pp.prompt)} 
-                        className="text-left px-3 py-2 rounded-lg bg-[#222] border border-white/5 hover:bg-[#333] hover:border-blue-500/50 transition-all group"
-                    >
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-gray-300 group-hover:text-white">{pp.label}</span>
-                            <ArrowRight className="w-3 h-3 text-gray-600 group-hover:text-blue-500"/>
-                        </div>
-                    </button>
-                ))}
-            </div>
+          <div className="p-4 bg-[#121212] border-t border-white/10 flex flex-col gap-3 shrink-0">
             <div className="flex gap-2">
                 <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Ask HR..." className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
                 <button onClick={() => handleSend()} disabled={isLoading} className="bg-white text-black p-2.5 rounded-xl hover:bg-gray-200"><Send className="w-4 h-4" /></button>
@@ -385,95 +351,89 @@ export const AiAssistant: React.FC = () => {
         </div>
       )}
 
-      {/* Immersive Mode */}
       {isImmersive && (
           <div className="fixed inset-0 z-[200] bg-black text-white font-sans flex animate-in zoom-in-95 duration-300">
-              {/* Sidebar */}
               <div className="w-72 bg-[#0a0a0a] border-r border-white/10 flex flex-col p-6 hidden md:flex">
                   <div className="flex items-center gap-3 mb-8">
                       <div className="w-10 h-10 bg-[#FFD700] rounded-xl flex items-center justify-center text-black shadow-[4px_4px_0_0_#fff]"><Bot className="w-6 h-6"/></div>
                       <h2 className="font-black text-xl uppercase tracking-tighter">Agent<br/>Console</h2>
                   </div>
                   <button onClick={startNewChat} className="w-full flex items-center gap-2 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold mb-6 transition-all shadow-lg"><Plus className="w-4 h-4"/> New Session</button>
-                  
                   <div className="space-y-2 flex-1 overflow-y-auto">
                       <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Execute Scenario</h4>
                       {POWER_PROMPTS.map((pp, idx) => (
-                        <button 
-                            key={idx} 
-                            onClick={() => handleSend(pp.prompt)} 
-                            className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group"
-                        >
+                        <button key={idx} onClick={() => handleSend(pp.prompt)} className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
                             <span className="text-xs font-bold text-gray-300 group-hover:text-white block">{pp.label}</span>
                         </button>
                       ))}
                   </div>
-                  
                   <button onClick={() => setIsImmersive(false)} className="mt-auto flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm font-bold"><Minimize2 className="w-4 h-4"/> Exit Fullscreen</button>
               </div>
 
-              {/* Chat Area */}
               <div className="flex-1 flex flex-col bg-black relative">
                   <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
-                  
                   <div className="flex-1 overflow-y-auto p-8 space-y-6 relative z-10" ref={scrollRef}>
-                      {/* START STATE: Prompt Capsules */}
                       {messages.length === 1 && (
-                          <div className="max-w-4xl mx-auto mt-20 grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-10 fade-in duration-700">
-                              {POWER_PROMPTS.map((pp, idx) => (
-                                  <button
-                                      key={idx}
-                                      onClick={() => handleSend(pp.prompt)}
-                                      className="group p-6 bg-[#1a1a1a] border border-white/10 hover:border-blue-500 hover:bg-[#222] rounded-2xl text-left transition-all hover:scale-[1.02] shadow-xl"
-                                  >
-                                      <div className="flex items-center gap-4 mb-2">
-                                          <div className="w-10 h-10 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                              <pp.icon className="w-5 h-5" />
-                                          </div>
-                                          <h4 className="font-black text-lg text-white uppercase">{pp.label}</h4>
-                                      </div>
-                                      <p className="text-sm text-gray-400 group-hover:text-gray-300">{pp.desc}</p>
-                                  </button>
-                              ))}
-                          </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto mt-20 animate-in fade-in zoom-in duration-500">
+                          {POWER_PROMPTS.map((pp, idx) => (
+                            <button key={idx} onClick={() => handleSend(pp.prompt)} className="text-left p-6 rounded-[2rem] bg-[#111] border-2 border-white/10 hover:border-blue-500 hover:bg-[#1a1a1a] transition-all group shadow-xl">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all"><pp.icon className="w-6 h-6" /></div>
+                                    <h4 className="font-black text-white uppercase tracking-wider">{pp.label}</h4>
+                                </div>
+                                <p className="text-gray-400 text-sm leading-relaxed">{pp.desc}</p>
+                            </button>
+                          ))}
+                        </div>
                       )}
-
-                      {/* Message Loop */}
-                      {messages.map((msg, idx) => (
-                          <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 ${msg.role === 'user' ? 'bg-white border-gray-200 text-black' : 'bg-[#FFD700] border-yellow-600 text-black'}`}>
-                                  {msg.role === 'user' ? <Users className="w-5 h-5"/> : <Bot className="w-5 h-5"/>}
-                              </div>
-                              <div className={`max-w-2xl p-6 rounded-3xl text-lg leading-relaxed shadow-lg border-2 ${msg.role === 'user' ? 'bg-[#1a1a1a] text-white border-white/20' : 'bg-white text-black border-gray-200'}`}>
-                                  {/* IMMERSIVE MODE: User is dark (bg-1a1a1a), AI is light (bg-white). Dynamic logic needed. */}
-                                  <MessageRenderer text={msg.text} isDarkBg={msg.role === 'user'} />
-                              </div>
-                          </div>
-                      ))}
-                      {isLoading && <div className="flex gap-4"><div className="w-10 h-10 rounded-full bg-[#FFD700] flex items-center justify-center shrink-0 animate-pulse"><Bot className="w-5 h-5 text-black"/></div><div className="bg-white/10 p-4 rounded-xl text-gray-400 text-sm">Processing...</div></div>}
-                  </div>
-
-                  <div className="p-6 bg-black border-t border-white/10 relative z-20">
-                      <div className="flex gap-4 max-w-4xl mx-auto">
-                          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Command the agent..." className="flex-1 bg-[#1a1a1a] border-2 border-white/20 rounded-2xl px-6 py-4 text-xl text-white focus:outline-none focus:border-[#FFD700] focus:shadow-[0_0_20px_rgba(255,215,0,0.2)] transition-all placeholder-gray-600" autoFocus />
-                          <button onClick={() => handleSend()} className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl transition-all shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] active:translate-y-1 active:shadow-none border-2 border-blue-400"><Send className="w-6 h-6" /></button>
+                      <div className="max-w-5xl mx-auto space-y-8 pb-32">
+                         {messages.map((msg, idx) => (
+                           <div key={idx} className="space-y-4">
+                               <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                 <div className={`max-w-[70%] p-6 rounded-3xl border-2 ${msg.role === 'user' ? 'bg-blue-600 text-white border-blue-400 shadow-[8px_8px_0_0_#1e3a8a]' : 'bg-[#121212] text-gray-200 border-white/10 shadow-[8px_8px_0_0_#000]'}`}>
+                                   <MessageRenderer text={msg.text} isDarkBg={true} />
+                                   <div className={`mt-4 pt-4 border-t ${msg.role === 'user' ? 'border-white/10' : 'border-white/5'} flex justify-between items-center`}>
+                                     <span className="text-[10px] font-black uppercase tracking-widest opacity-50">{msg.role === 'user' ? currentUser?.name : 'AI HR AGENT'}</span>
+                                     <span className="text-[10px] font-mono opacity-50">{msg.timestamp.toLocaleTimeString()}</span>
+                                   </div>
+                                 </div>
+                               </div>
+                               {msg.role === 'model' && msg.suggestions && (
+                                   <div className="flex flex-wrap gap-3 justify-start max-w-[70%] mx-auto md:mx-0">
+                                       {msg.suggestions.map((s, sIdx) => (
+                                           <button 
+                                               key={sIdx} 
+                                               onClick={() => handleSend(s, true)}
+                                               className="px-4 py-2 rounded-2xl border-2 border-blue-500/20 bg-blue-500/10 text-blue-400 text-xs font-black uppercase tracking-widest hover:bg-blue-500 hover:text-white hover:border-blue-400 transition-all shadow-lg"
+                                           >
+                                               {s}
+                                           </button>
+                                       ))}
+                                   </div>
+                               )}
+                           </div>
+                         ))}
+                         {isLoading && <div className="flex justify-start"><div className="bg-[#121212] p-4 rounded-2xl text-sm text-blue-400 border border-blue-500/20 animate-pulse flex items-center gap-2"><Sparkles className="w-4 h-4 animate-spin"/> Generating deep intelligence report...</div></div>}
                       </div>
                   </div>
-              </div>
-
-              {/* Data Deck */}
-              <div className="w-[450px] bg-[#050505] border-l border-white/10 flex flex-col hidden lg:flex transition-all">
-                  <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0a0a0a]">
-                      <h3 className="font-black text-gray-400 uppercase tracking-widest text-xs">Live Visual Deck</h3>
-                      <div className="flex gap-2"><div className={`w-3 h-3 rounded-full ${activeVisual !== 'NONE' ? 'bg-green-500 animate-pulse' : 'bg-gray-800'}`}></div></div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto relative">{renderDataDeck()}</div>
-                  <div className="p-6 border-t border-white/10 bg-[#0a0a0a] flex justify-between items-center text-xs font-mono">
-                      <span className="text-gray-500">POWERED BY GEMINI 2.5</span>
-                      <a href="https://w3jdev.com" target="_blank" rel="noopener noreferrer" className="text-[#FFD700] font-bold hover:underline">MADE BY W3JDEV</a>
+                  <div className="p-8 bg-black/50 backdrop-blur-xl border-t border-white/10 shrink-0 z-20">
+                     <div className="max-w-4xl mx-auto flex gap-4">
+                        <div className="flex-1 relative group">
+                            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Ask anything about employees, payroll, or labor law..." className="w-full bg-[#111] border-2 border-white/10 rounded-[2rem] px-8 py-6 text-white text-lg focus:outline-none focus:border-blue-500 transition-all shadow-inner" />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2">
+                                <button className="p-3 text-gray-500 hover:text-white transition-colors"><Mic className="w-6 h-6"/></button>
+                                <button onClick={() => handleSend()} className="p-4 bg-white text-black rounded-2xl hover:bg-blue-500 hover:text-white transition-all"><Send className="w-6 h-6"/></button>
+                            </div>
+                        </div>
+                     </div>
                   </div>
               </div>
-              <button onClick={() => setIsImmersive(false)} className="absolute top-4 right-4 md:hidden bg-red-600 text-white p-2 rounded-full z-50"><X className="w-6 h-6"/></button>
+              <div className="w-full xl:w-[500px] bg-[#050505] border-l border-white/10 hidden xl:flex flex-col relative overflow-y-auto">
+                 <div className="p-6 border-b border-white/10 bg-black/40 sticky top-0 z-10 backdrop-blur-md">
+                     <h3 className="font-black text-xl uppercase tracking-widest flex items-center gap-2"><Activity className="w-5 h-5 text-blue-500"/> Data Deck</h3>
+                 </div>
+                 {renderDataDeck()}
+              </div>
           </div>
       )}
     </>

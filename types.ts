@@ -212,6 +212,7 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: Date;
+  suggestions?: string[];
 }
 
 export type Language = 'en' | 'ms' | 'zh' | 'ta';
@@ -223,6 +224,9 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  preferences?: {
+    aiInteractions: Record<string, number>; // topic -> count
+  }
 }
 
 export interface LeaveRequest {

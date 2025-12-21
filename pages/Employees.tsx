@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Search, X, Clock, MapPin, Calendar as CalendarIcon, CheckCircle, AlertTriangle, XCircle, ArrowRight, User, Briefcase, Hash, Filter, MoreHorizontal, Trash2, ChevronLeft, ChevronRight, Lock, Download, ScanFace, GitFork, Camera, RefreshCcw, LayoutList, History, Award, BookOpen } from 'lucide-react';
+import { Plus, Search, X, Clock, MapPin, Calendar as CalendarIcon, CheckCircle, AlertTriangle, XCircle, ArrowRight, User, Briefcase, Hash, Filter, MoreHorizontal, Trash2, ChevronLeft, ChevronRight, Lock, Download, ScanFace, GitFork, Camera, RefreshCcw, LayoutList, History, Award, BookOpen, ShieldAlert } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { Employee, AttendanceRecord } from '../types';
 import { NeoButton, NeoCard, NeoInput, NeoBadge } from '../components/NeoComponents';
-import { loadFaceModels, detectFace } from '../services/faceBiometricService';
+import { loadFaceModels, detectFace, findDuplicateFace, initializeFaceMatcher } from '../services/faceBiometricService';
 
 // Predefined skills for quick selection
 const COMMON_SKILLS = [
@@ -33,10 +33,12 @@ export const Employees: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Load models on mount
+  // Load models and initialize matcher on mount
   useEffect(() => {
-      loadFaceModels();
-  }, []);
+      loadFaceModels().then(() => {
+          initializeFaceMatcher(employees);
+      });
+  }, [employees]);
 
   const filteredEmployees = employees.filter(e => 
     e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -50,8 +52,10 @@ export const Employees: React.FC = () => {
       status: 'Active',
       role: 'Employee',
       department: 'General',
+      baseSalary: 0,
       skills: [],
-      reportsTo: ''
+      reportsTo: '',
+      pin: Math.floor(100000 + Math.random() * 900000).toString() // Generate random 6-digit PIN
     });
     setIsEditMode(true);
   };
@@ -65,10 +69,16 @@ export const Employees: React.FC = () => {
   const handleSave = () => {
     if (!formData.name || !formData.id) return alert("Name and ID required");
     
+    // Ensure baseSalary is a number
+    const finalData = {
+        ...formData,
+        baseSalary: formData.baseSalary || 0
+    } as Employee;
+
     if (selectedEmp && selectedEmp.id === formData.id) {
-      updateEmployee(formData as Employee);
+      updateEmployee(finalData);
     } else {
-      addEmployee(formData as Employee);
+      addEmployee(finalData);
     }
     setIsEditMode(false);
     if (!selectedEmp) setSelectedEmp(null); 
@@ -103,10 +113,19 @@ export const Employees: React.FC = () => {
   const captureFace = async () => {
      if (!videoRef.current) return;
      
-     addNotification("Scanning Face...", "info");
+     addNotification("Scanning for unique biometric signature...", "info");
      const detection = await detectFace(videoRef.current);
      
      if (detection) {
+        // SECURITY: Check for duplicates before enrolling
+        const { isDuplicate, matchedId } = findDuplicateFace(detection.descriptor, formData.id);
+        
+        if (isDuplicate) {
+            const matchedEmp = employees.find(e => e.id === matchedId);
+            addNotification(`IDENTITY CONFLICT: This face is already registered to ${matchedEmp?.name} (${matchedId}). Enrollment blocked for security.`, "error");
+            return;
+        }
+
         // Convert Float32Array to standard array for JSON storage
         const descriptorArray = Array.from(detection.descriptor) as number[];
         setFormData(prev => ({ 
@@ -115,9 +134,9 @@ export const Employees: React.FC = () => {
             faceDescriptor: descriptorArray
         }));
         setIsFaceRegMode(false);
-        addNotification("Face Biometrics Captured Successfully", "success");
+        addNotification("Secure Face ID Captured Successfully", "success");
      } else {
-         addNotification("No face detected. Please center your face.", "error");
+         addNotification("No face detected. Please center your face in the frame.", "error");
      }
   };
 
@@ -335,7 +354,7 @@ export const Employees: React.FC = () => {
                                      </div>
                                      <div>
                                          <p className="font-bold text-black dark:text-white text-sm">{selectedEmp.faceRegistered ? 'Face ID Active' : 'Not Registered'}</p>
-                                         <p className="text-xs text-gray-500">Last updated: {selectedEmp.faceRegistered ? '2023-10-01' : '-'}</p>
+                                         <p className="text-xs text-gray-500">ID: {selectedEmp.id}</p>
                                      </div>
                                  </div>
                              </NeoCard>
@@ -347,6 +366,8 @@ export const Employees: React.FC = () => {
                                 <div><span className="block text-gray-500 text-xs uppercase font-bold">Email</span><span className="text-black dark:text-white">{selectedEmp.email || 'N/A'}</span></div>
                                 <div><span className="block text-gray-500 text-xs uppercase font-bold">Join Date</span><span className="text-black dark:text-white">{selectedEmp.joinDate}</span></div>
                                 <div><span className="block text-gray-500 text-xs uppercase font-bold">Reports To</span><span className="text-black dark:text-white">{employees.find(e => e.id === selectedEmp.reportsTo)?.name || 'None'}</span></div>
+                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Base Salary</span><span className="text-black dark:text-white font-mono">RM {selectedEmp.baseSalary?.toLocaleString() || '0'}</span></div>
+                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Kiosk PIN</span><span className="text-black dark:text-white font-mono">{selectedEmp.pin || '------'}</span></div>
                                 <div><span className="block text-gray-500 text-xs uppercase font-bold">Status</span><span className={`font-bold ${selectedEmp.status === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{selectedEmp.status}</span></div>
                             </div>
                          </div>
@@ -496,7 +517,10 @@ export const Employees: React.FC = () => {
                   {/* Face Registration UI */}
                   {isFaceRegMode ? (
                       <div className="bg-black p-8 rounded-2xl border-[4px] border-white text-center shadow-2xl">
-                          <h4 className="text-white font-black uppercase text-xl mb-6">Biometric Enrollment</h4>
+                          <div className="flex items-center justify-center gap-3 mb-4">
+                             <ShieldAlert className="w-6 h-6 text-red-500 animate-pulse" />
+                             <h4 className="text-white font-black uppercase text-xl">Identity Verification</h4>
+                          </div>
                           <div className="w-64 h-64 mx-auto bg-gray-900 rounded-3xl mb-6 relative overflow-hidden border-[6px] border-[#FFD700] shadow-[0_0_30px_rgba(255,215,0,0.3)]">
                              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent animate-scan z-10"></div>
                              {/* Real Camera View */}
@@ -507,13 +531,13 @@ export const Employees: React.FC = () => {
                                  className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
                              />
                              <div className="absolute bottom-4 inset-x-0 text-center z-20">
-                                <span className="bg-black/80 text-white text-xs px-3 py-1 rounded-full border border-white/30">Position Face in Center</span>
+                                <span className="bg-black/80 text-white text-xs px-3 py-1 rounded-full border border-white/30">Hold still for secure scan</span>
                              </div>
                           </div>
                           <div className="flex justify-center gap-4">
                               <NeoButton onClick={() => setIsFaceRegMode(false)} variant="danger">Cancel</NeoButton>
                               <NeoButton onClick={captureFace} variant="primary" className="bg-[#FFD700] text-black border-white hover:bg-yellow-400">
-                                <Camera className="w-5 h-5 mr-2" /> Capture Face
+                                <Camera className="w-5 h-5 mr-2" /> Capture Biometrics
                               </NeoButton>
                           </div>
                       </div>
@@ -526,6 +550,10 @@ export const Employees: React.FC = () => {
                         <div>
                            <label className="text-xs text-gray-500 font-black uppercase">ID</label>
                            <NeoInput value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} />
+                        </div>
+                        <div>
+                           <label className="text-xs text-gray-500 font-black uppercase">Kiosk PIN (6-digit)</label>
+                           <NeoInput maxLength={6} placeholder="123456" value={formData.pin || ''} onChange={e => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})} />
                         </div>
                         <div>
                            <label className="text-xs text-gray-500 font-black uppercase">NRIC / Passport</label>
@@ -547,6 +575,10 @@ export const Employees: React.FC = () => {
                                   <option key={e.id} value={e.id}>{e.name}</option>
                               ))}
                            </select>
+                        </div>
+                        <div>
+                           <label className="text-xs text-gray-500 font-black uppercase">Base Salary (RM)</label>
+                           <NeoInput type="number" value={formData.baseSalary || ''} onChange={e => setFormData({...formData, baseSalary: parseFloat(e.target.value)})} />
                         </div>
                         
                         {/* Skills Multi-Select */}
@@ -589,13 +621,13 @@ export const Employees: React.FC = () => {
                         </div>
 
                         <div className="col-span-2">
-                           <label className="text-xs text-gray-500 font-black uppercase mb-2 block">Face Biometrics</label>
-                           <div className="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5">
-                               <div className={`w-3 h-3 rounded-full ${formData.faceRegistered ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                               <span className="text-black dark:text-white font-bold text-sm flex-1">{formData.faceRegistered ? 'Registered' : 'Not Registered'}</span>
+                           <label className="text-xs text-gray-500 font-black uppercase mb-2 block">Identity Verification</label>
+                           <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${formData.faceRegistered ? 'bg-green-500/5 border-green-500/50' : 'bg-red-500/5 border-red-500/50'}`}>
+                               <div className={`w-3 h-3 rounded-full ${formData.faceRegistered ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                               <span className="text-black dark:text-white font-bold text-sm flex-1">{formData.faceRegistered ? 'Biometrics Active' : 'Unregistered'}</span>
                                <NeoButton variant="secondary" onClick={() => setIsFaceRegMode(true)}>
                                    <ScanFace className="w-4 h-4 mr-2" />
-                                   {formData.faceRegistered ? 'Re-Enroll Face' : 'Enroll Face ID'}
+                                   {formData.faceRegistered ? 'Re-Enroll Securely' : 'Enroll Face ID'}
                                </NeoButton>
                            </div>
                         </div>
@@ -606,7 +638,7 @@ export const Employees: React.FC = () => {
                {!isFaceRegMode && (
                    <div className="p-6 border-t border-gray-200 dark:border-white/10 flex justify-end gap-3 bg-gray-50 dark:bg-[#0a0a0a]">
                       <button onClick={() => setIsEditMode(false)} className="px-6 py-3 rounded-xl font-bold text-sm text-gray-600 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10">Cancel</button>
-                      <button onClick={handleSave} className="px-6 py-3 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-700">Save</button>
+                      <button onClick={handleSave} className="px-6 py-3 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-700">Save System Record</button>
                    </div>
                )}
             </div>

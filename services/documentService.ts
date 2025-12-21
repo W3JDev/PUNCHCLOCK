@@ -140,7 +140,7 @@ export const generateProfessionalPDF = (
          },
          { 
              title: "4. REMUNERATION", 
-             text: `The Employee shall be paid a monthly basic salary of RM ${employee.baseSalary.toLocaleString('en-MY', {minimumFractionDigits: 2})}. Payment will be made by the last day of each calendar month. Statutory contributions (EPF, SOCSO, EIS) will be deducted as per Malaysian Law.` 
+             text: `The Employee shall be paid a monthly basic salary of RM ${(employee.baseSalary || 0).toLocaleString('en-MY', {minimumFractionDigits: 2})}. Payment will be made by the last day of each calendar month. Statutory contributions (EPF, SOCSO, EIS) will be deducted as per Malaysian Law.` 
          },
          { 
              title: "5. WORKING HOURS", 

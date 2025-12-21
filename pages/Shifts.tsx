@@ -132,8 +132,9 @@ export const Shifts: React.FC = () => {
         createdCount++;
     });
 
+    // Fix: changed 'warning' to 'info' as the valid types for notifications are 'success' | 'error' | 'info'
     if (conflictsFound > 0) {
-        addNotification(`Scheduled ${createdCount} shifts. Skipped ${conflictsFound} conflicts.`, 'warning');
+        addNotification(`Scheduled ${createdCount} shifts. Skipped ${conflictsFound} conflicts.`, 'info');
     } else {
         addNotification(`Successfully scheduled ${createdCount} shifts.`, 'success');
     }

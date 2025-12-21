@@ -87,11 +87,14 @@ const buildContext = (
         `;
     }
 
+    const prefSummary = userPreferences ? `USER PREFERENCES (INTERACTION LOGS): ${JSON.stringify(userPreferences)}. Use this to prioritize topics the user frequently asks about.` : "";
+
     return `
       ${GENERAL_POLICY}
       CUSTOM COMPANY POLICIES: ${profile.policies || 'None defined.'}
       ${SITE_MAP}
       ${specificContext}
+      ${prefSummary}
       
       YOUR AGENT PROTOCOL:
       1. You are an expert HR Consultant AI. You don't just answer; you analyze and advise.
@@ -104,7 +107,12 @@ const buildContext = (
          - If drafting a Letter/Memo/Policy -> [VISUAL: POLICY_DOC]
          - If user needs to go to a page -> [NAVIGATE: /path]
 
-      4. **SCENARIO HANDLING:**
+      4. **SUGGESTION SYSTEM (CRITICAL):**
+         - At the end of EVERY response, you MUST provide 3 relevant follow-up suggestion pills in the format: [SUGGESTIONS: Pill 1, Pill 2, Pill 3].
+         - Tailor these suggestions based on the current conversation and the USER PREFERENCES provided.
+         - E.g. If the user asked about Payroll, suggestions might be "Calculate next month's OT", "Download KWSP file", "View salary trends".
+
+      5. **SCENARIO HANDLING:**
          - **Forecasting:** If asked to forecast, perform a linear projection based on provided data (e.g., if OT is high now, assume it continues). Be authoritative.
          - **Drafting:** If asked to draft a letter, write the full text in the response AND trigger [VISUAL: POLICY_DOC].
          - **Auditing:** If asked to audit, summarize the findings (e.g., "Found 3 employees late") and trigger [VISUAL: STAFF_TABLE].
@@ -140,13 +148,15 @@ export const chatWithHRAssistant = async (
         globalState.userPreferences
     );
 
+    // Fix: Using correct model name gemini-3-flash-preview for general chat tasks
     const chat = ai.chats.create({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       history: history,
       config: { systemInstruction: dynamicInstruction }
     });
 
     const response = await chat.sendMessage({ message });
+    // Fix: extraction using property .text (not .text())
     let fullText = response.text || "I couldn't generate a response.";
     
     // --- PARSE INTENTS & CLEAN TEXT ---
@@ -166,6 +176,13 @@ export const chatWithHRAssistant = async (
     if (navMatch) {
         navigation = navMatch[1];
         fullText = fullText.replace(navMatch[0], '');
+    }
+
+    // 3. Extract Suggestions
+    const sugMatch = fullText.match(/\[SUGGESTIONS: (.*?)\]/);
+    if (sugMatch) {
+        suggestions = sugMatch[1].split(',').map(s => s.trim());
+        fullText = fullText.replace(sugMatch[0], '');
     }
 
     return { text: fullText.trim(), intent, navigation, suggestions };
@@ -201,8 +218,9 @@ export const runComplianceAudit = async (
       Return JSON array of "ComplianceFlag".
     `;
 
+    // Fix: Using correct model name gemini-3-pro-preview for complex reasoning tasks like auditing
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -279,8 +297,9 @@ export const generateHRDocument = async (
     }
 
     try {
+        // Fix: Using gemini-3-pro-preview for advanced text generation tasks like legal drafting
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-pro-preview',
             contents: promptContext,
         });
         return response.text || "<p>Error: AI generation failed.</p>";
@@ -333,8 +352,9 @@ export const generateAutoRoster = async (
     `;
 
     try {
+        // Fix: Using gemini-3-pro-preview for roster optimization
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-pro-preview',
             contents: prompt,
             config: {
                 responseMimeType: "application/json"
@@ -394,8 +414,9 @@ export const suggestShiftReplacement = async (
     `;
 
     try {
+        // Fix: Using gemini-3-pro-preview for critical reasoning
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-pro-preview',
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -407,8 +428,9 @@ export const suggestShiftReplacement = async (
 };
 
 export const analyzeAttendancePatterns = async (attendanceData: any[]): Promise<any> => {
+    // Fix: Using gemini-3-flash-preview for quick analytical tasks
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: `Analyze attendance: ${JSON.stringify(attendanceData.slice(0,10))}`,
         config: { responseMimeType: "application/json" }
     });

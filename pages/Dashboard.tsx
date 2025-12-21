@@ -6,7 +6,7 @@ import {
   Users, Clock, AlertTriangle, TrendingUp, ArrowRight, Download, 
   FileText, Briefcase, DollarSign, Calendar, Check, X, Plus, Play,
   Activity, UploadCloud, Megaphone, Bell, ClipboardList, Info, CheckCircle, XCircle,
-  Plane, Banknote, CalendarDays, User, HelpCircle, FileCheck, LogIn, Filter, GripVertical, RotateCcw, LayoutTemplate
+  Plane, Banknote, CalendarDays, User, HelpCircle, FileCheck, LogIn, Filter, GripVertical, RotateCcw, LayoutTemplate, ShieldCheck, Eye, EyeOff, ScanFace
 } from 'lucide-react';
 import { analyzeAttendancePatterns } from '../services/geminiService';
 import { useGlobal } from '../context/GlobalContext';
@@ -16,7 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 const COLORS = ['#3B82F6', '#FFD700', '#EF4444'];
 
 // --- WIDGET TYPES & DEFAULTS ---
-type WidgetType = 'kpi' | 'weekly-trend' | 'team-pulse' | 'manager-actions' | 'quick-launch' | 'bulletin';
+type WidgetType = 'kpi' | 'weekly-trend' | 'team-pulse' | 'manager-actions' | 'quick-launch' | 'bulletin' | 'security-pass';
 
 interface DashboardWidget {
     id: string;
@@ -31,6 +31,7 @@ const DEFAULT_LAYOUT: DashboardWidget[] = [
     { id: '4', type: 'manager-actions', colSpan: 2 },
     { id: '5', type: 'quick-launch', colSpan: 1 },
     { id: '6', type: 'bulletin', colSpan: 3 },
+    { id: '7', type: 'security-pass', colSpan: 1 },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -58,6 +59,7 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [insight, setInsight] = useState<{riskLevel: string, suggestion: string} | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   
   // Layout State
   const [layout, setLayout] = useState<DashboardWidget[]>(DEFAULT_LAYOUT);
@@ -214,16 +216,7 @@ export const Dashboard: React.FC = () => {
           case 'kpi':
               return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
-                    {/* KPI Cards: Refined 3D Crystal Style - Responsive for Day/Dark Mode */}
-                    <div className="
-                        relative group overflow-hidden rounded-3xl 
-                        bg-white dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-black
-                        border border-gray-200 dark:border-white/20
-                        shadow-lg dark:shadow-[10px_10px_20px_#000,-2px_-2px_6px_rgba(255,255,255,0.1)]
-                        flex flex-col justify-between p-6 min-h-[220px]
-                        transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl
-                        backdrop-blur-xl
-                    ">
+                    <div className="relative group overflow-hidden rounded-3xl bg-white dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-black border border-gray-200 dark:border-white/20 shadow-lg dark:shadow-[10px_10px_20px_#000,-2px_-2px_6px_rgba(255,255,255,0.1)] flex flex-col justify-between p-6 min-h-[220px] transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl backdrop-blur-xl">
                         <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none group-hover:bg-blue-500/20 transition-colors"></div>
                         <div className="flex justify-between items-start z-10">
                             <p className="text-gray-500 dark:text-gray-400 text-sm font-black uppercase tracking-[0.2em]">Present</p>
@@ -232,20 +225,12 @@ export const Dashboard: React.FC = () => {
                         <div className="z-10 mt-auto">
                             <h3 className="text-7xl font-black text-black dark:text-white tracking-tighter drop-shadow-sm dark:drop-shadow-2xl">{dashboardStats.presentToday}</h3>
                             <div className="w-full bg-gray-200 dark:bg-gray-800 h-2 mt-4 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
-                                <div className="h-full bg-blue-500 shadow-[0_0_10px_#3B82F6]" style={{width: `${(dashboardStats.presentToday / employees.length) * 100}%`}}></div>
+                                <div className="h-full bg-blue-500 shadow-[0_0_10px_#3B82F6]" style={{width: `${(dashboardStats.presentToday / Math.max(1, employees.length)) * 100}%`}}></div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="
-                        relative group overflow-hidden rounded-3xl 
-                        bg-white dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-black
-                        border border-gray-200 dark:border-white/20
-                        shadow-lg dark:shadow-[10px_10px_20px_#000,-2px_-2px_6px_rgba(255,255,255,0.1)]
-                        flex flex-col justify-between p-6 min-h-[220px]
-                        transition-all duration-300 hover:border-yellow-500/50 hover:shadow-xl
-                        backdrop-blur-xl
-                    ">
+                    <div className="relative group overflow-hidden rounded-3xl bg-white dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-black border border-gray-200 dark:border-white/20 shadow-lg dark:shadow-[10px_10px_20px_#000,-2px_-2px_6px_rgba(255,255,255,0.1)] flex flex-col justify-between p-6 min-h-[220px] transition-all duration-300 hover:border-yellow-500/50 hover:shadow-xl backdrop-blur-xl">
                         <div className="absolute top-0 right-0 w-40 h-40 bg-yellow-500/10 blur-[60px] rounded-full pointer-events-none group-hover:bg-yellow-500/20 transition-colors"></div>
                         <div className="flex justify-between items-start z-10">
                             <p className="text-gray-500 dark:text-gray-400 text-sm font-black uppercase tracking-[0.2em]">Late</p>
@@ -259,15 +244,7 @@ export const Dashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="
-                        relative group overflow-hidden rounded-3xl 
-                        bg-white dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-black
-                        border border-gray-200 dark:border-white/20
-                        shadow-lg dark:shadow-[10px_10px_20px_#000,-2px_-2px_6px_rgba(255,255,255,0.1)]
-                        flex flex-col justify-between p-6 min-h-[220px]
-                        transition-all duration-300 hover:border-red-500/50 hover:shadow-xl
-                        backdrop-blur-xl
-                    ">
+                    <div className="relative group overflow-hidden rounded-3xl bg-white dark:bg-gradient-to-br dark:from-[#1a1a1a] dark:to-black border border-gray-200 dark:border-white/20 shadow-lg dark:shadow-[10px_10px_20px_#000,-2px_-2px_6px_rgba(255,255,255,0.1)] flex flex-col justify-between p-6 min-h-[220px] transition-all duration-300 hover:border-red-500/50 hover:shadow-xl backdrop-blur-xl">
                         <div className="absolute top-0 right-0 w-40 h-40 bg-red-500/10 blur-[60px] rounded-full pointer-events-none group-hover:bg-red-500/20 transition-colors"></div>
                         <div className="flex justify-between items-start z-10">
                             <p className="text-gray-500 dark:text-gray-400 text-sm font-black uppercase tracking-[0.2em]">Absent</p>
@@ -314,6 +291,39 @@ export const Dashboard: React.FC = () => {
                         </div>
                     </div>
                 </NeoCard>
+              );
+          case 'security-pass':
+              return (
+                  <NeoCard title="Security Pass" className="h-full border-l-4 border-l-yellow-500 bg-black dark:bg-[#050505]">
+                      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                          <div className="relative group">
+                              <div className="absolute inset-0 bg-blue-500/20 blur-[40px] rounded-full animate-pulse group-hover:bg-blue-500/40 transition-all"></div>
+                              <div className="relative bg-white/5 border border-white/20 p-6 rounded-3xl shadow-2xl">
+                                  {emp?.faceRegistered ? (
+                                      <ScanFace className="w-12 h-12 text-green-500" />
+                                  ) : (
+                                      <ShieldCheck className="w-12 h-12 text-red-500" />
+                                  )}
+                              </div>
+                          </div>
+                          <div>
+                              <h4 className="text-white font-black uppercase text-sm tracking-widest">Kiosk Identity</h4>
+                              <p className="text-xs text-gray-500 mt-1">{emp?.faceRegistered ? 'Biometrics Verified' : 'Face ID Not Set'}</p>
+                          </div>
+                          <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-500 uppercase">Emergency Backup PIN</span>
+                              <div className="flex items-center gap-3">
+                                  <span className="text-2xl font-black text-white font-mono tracking-widest">
+                                      {showPin ? emp?.pin || '------' : '••••••'}
+                                  </span>
+                                  <button onClick={() => setShowPin(!showPin)} className="p-2 text-gray-500 hover:text-white transition-colors">
+                                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                              </div>
+                          </div>
+                          <p className="text-[9px] text-gray-600 uppercase font-bold">Never share your PIN with anyone</p>
+                      </div>
+                  </NeoCard>
               );
           case 'manager-actions':
               return (
@@ -433,8 +443,10 @@ export const Dashboard: React.FC = () => {
       {/* DRAGGABLE BENTO GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 auto-rows-min">
           {layout.map((widget, index) => {
-              // Hide manager widgets for staff
+              // Manager logic
               if (currentUser.role === 'Staff' && (widget.type === 'manager-actions' || widget.type === 'team-pulse')) return null;
+              // Staff specific logic
+              if (currentUser.role !== 'Staff' && widget.type === 'security-pass') return null;
 
               // Responsive Col Spans
               const colClass = widget.colSpan === 4 ? 'md:col-span-2 xl:col-span-4' :
@@ -468,7 +480,6 @@ export const Dashboard: React.FC = () => {
           })}
       </div>
 
-      {/* Modal remains the same... */}
       <NeoModal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="Submit Request">
            <div className="space-y-6">
              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-white/10">

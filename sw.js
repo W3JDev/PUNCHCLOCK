@@ -1,29 +1,37 @@
-const CACHE_NAME = 'punchclock-v2';
-const DYNAMIC_CACHE = 'punchclock-dynamic-v2';
 
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'punchclock-app-v3';
+const DYNAMIC_CACHE = 'punchclock-dynamic-v3';
+
+// 1. App Shell - Critical assets for instant load
+const ASSETS_TO_PRECACHE = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  'https://cdn.tailwindcss.com', // Pre-cache Tailwind (if allowed by CORS)
+  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@500;700;900&display=swap'
 ];
 
-// Install Event: Cache Core Assets
+// --- INSTALL ---
 self.addEventListener('install', (event) => {
+  console.log('[Service Worker] Installing Service Worker ...', event);
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      console.log('[Service Worker] Precaching App Shell');
+      return cache.addAll(ASSETS_TO_PRECACHE);
     })
   );
-  self.skipWaiting();
+  self.skipWaiting(); // Force activation
 });
 
-// Activate Event: Cleanup Old Caches
+// --- ACTIVATE ---
 self.addEventListener('activate', (event) => {
+  console.log('[Service Worker] Activating Service Worker ...', event);
   event.waitUntil(
-    caches.keys().then((keys) => {
+    caches.keys().then((keyList) => {
       return Promise.all(
-        keys.map((key) => {
+        keyList.map((key) => {
           if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
+            console.log('[Service Worker] Removing old cache.', key);
             return caches.delete(key);
           }
         })
@@ -33,39 +41,54 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch Event: Network First for Nav, Stale-While-Revalidate for Assets
+// --- FETCH STRATEGIES ---
 self.addEventListener('fetch', (event) => {
-  // 1. Navigation Requests (HTML): Network First -> Fallback to Cache -> Fallback to /index.html (SPA)
-  if (event.request.mode === 'navigate') {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // 1. API Calls / Dynamic Data: Network First, No Cache
+  // We want real-time data for APIs. If offline, the app handles it gracefully via try/catch.
+  if (url.pathname.includes('/api/') || request.method !== 'GET') {
+    return; // Let browser handle it (Network only)
+  }
+
+  // 2. Navigation Requests (HTML): Network First -> Cache -> Offline Fallback
+  if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      fetch(request)
         .catch(() => {
-          return caches.match(event.request).then((cachedResponse) => {
+          return caches.match(request).then((cachedResponse) => {
              if (cachedResponse) return cachedResponse;
-             // Critical for SPA: serve index.html if offline and route is not cached
-             return caches.match('/index.html');
+             // If navigation fails and not in cache, return index.html (SPA) or Offline page
+             return caches.match('/index.html')
+               .then(indexRes => indexRes || caches.match('/offline.html')); // Fallback chain
           });
         })
     );
     return;
   }
 
-  // 2. Static Assets (JS/CSS/Images): Stale-While-Revalidate
-  // We check destinations to cache images/scripts/styles loaded at runtime
-  if (event.request.destination === 'script' || event.request.destination === 'style' || event.request.destination === 'image') {
+  // 3. Static Assets (JS, CSS, Images, Fonts): Stale-While-Revalidate
+  // Serve from cache immediately, then update cache in background
+  if (
+    request.destination === 'script' || 
+    request.destination === 'style' || 
+    request.destination === 'image' || 
+    request.destination === 'font'
+  ) {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-           // Basic CORS check before caching opaque or valid responses
-           if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+      caches.match(request).then((cachedResponse) => {
+        const fetchPromise = fetch(request).then((networkResponse) => {
+           // Check if valid response before caching
+           if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
               const responseToCache = networkResponse.clone();
               caches.open(DYNAMIC_CACHE).then((cache) => {
-                cache.put(event.request, responseToCache);
+                cache.put(request, responseToCache);
               });
            }
            return networkResponse;
-        }).catch((err) => {
-           // Network failed, do nothing (will return cachedResponse if available)
+        }).catch(() => {
+           // Network failure, just return what we have
         });
         return cachedResponse || fetchPromise;
       })
@@ -73,6 +96,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Default: Network Only
-  event.respondWith(fetch(event.request));
+  // 4. Default Fallback
+  event.respondWith(
+    caches.match(request).then((response) => {
+      return response || fetch(request);
+    })
+  );
+});
+
+// --- BACKGROUND SYNC (Placeholder) ---
+// Useful for syncing punch-ins made while offline
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-attendance') {
+    console.log('[Service Worker] Syncing Attendance Data...');
+    // event.waitUntil(syncAttendance());
+  }
 });
