@@ -1,26 +1,18 @@
 
-# Product Vision: PUNCH⏰CLOCK Malaysia
+# Product Vision: PUNCH⏰CLOCK Quantum HR
 
-## 1. The Problem
-Malaysian SMEs (Small & Medium Enterprises) are trapped in an administrative nightmare.
-*   **Attendance**: Tracking staff via WhatsApp groups or punch cards is prone to fraud ("Buddy Punching").
-*   **Payroll**: Excel spreadsheets are error-prone and fail to keep up with complex LHDN/KWSP statutory calculations.
-*   **Compliance**: Business owners unknowingly breach the Employment Act 1955 (e.g., OT limits, Friday prayer breaks), leading to fines.
-*   **Cost**: Enterprise HR software (SAP, Workday) is too expensive and complex.
+## 1. The Core Philosophy: "Enterprise for Everyone"
+High-fidelity HR operations shouldn't require an SAP budget. **PUNCH⏰CLOCK** levels the playing field by providing Malaysian SMEs with tools that are faster, more secure, and more intelligent than traditional corporate suites.
 
-## 2. The Solution
-**PUNCH⏰CLOCK** is a "Zero-Friction" HR Operating System. It combines consumer-grade UX (Neo-Brutalism) with enterprise-grade logic.
+## 2. The Shift to "Intelligence"
+In v2.5, we moved from "Data Entry" to "Workforce Foresight".
+*   **Manual**: Reviewing lateness logs one by one.
+*   **Intelligence**: AI identifies a 12% drop in punctuality on rainy Fridays and suggests adjusting the roster 2 weeks in advance.
 
-### Core Value Proposition
-1.  **Hardware Agnostic**: Turns any iPad or cheap Android tablet into a biometric kiosk.
-2.  **Compliance-First**: The system *knows* Malaysian law. It prevents illegal rosters and calculates taxes correctly.
-3.  **AI-Agentic**: It doesn't just store data; it acts on it. It drafts warning letters, plans shifts, and audits risks.
-4.  **Offline-First**: Designed for unstable internet environments (factories, retail basements).
+## 3. Tactile Authority (Neo-Brutalism)
+The UI is built to feel **heavy** and **definite**. In a world of floating, soft interfaces, PunchClock stands out as a solid tool for solid businesses. Thick borders and high contrast aren't just a style; they are an accessibility standard for fast-paced retail and kitchen environments.
 
-## 3. Target Audience
-*   **F&B Owners**: Cafes, Restaurants (High turnover, shift-based).
-*   **Retail**: Boutiques, Convenience Stores.
-*   **SME Offices**: Agencies, Consultancies (20-100 staff).
-
-## 4. The "Neo-Brutalist" Philosophy
-HR software is typically boring and grey. We chose **Neo-Brutalism** to make the mundane task of HR feel tactile, urgent, and modern. High contrast ensures readability in bright environments (kitchens, outdoors).
+## 4. Key Strategic Pillars
+1.  **Absolute Compliance**: Zero-effort adherence to the Employment Act 1955.
+2.  **Biometric Sovereignty**: Local, secure identity verification that belongs to the SME, not a cloud giant.
+3.  **Seamless Automation**: From a "Smile" at the kiosk to a PDF Payslip in the employee's inbox, every step is automated.

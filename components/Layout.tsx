@@ -23,12 +23,14 @@ import {
   FileText,
   Github,
   Linkedin,
-  Globe
+  Globe,
+  MonitorPlay
 } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { UserRole } from '../types';
 import { NeoToast } from './ui/NeoToast';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
+import { PunchClockLogo } from './ui/BrutalistIcons';
 
 interface NavItemProps {
   to: string;
@@ -100,12 +102,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const location = useLocation();
 
   // Redirect if not logged in (unless on login page)
-  if (!currentUser && location.pathname !== '/login') {
+  if (!currentUser && location.pathname !== '/login' && location.pathname !== '/showcase') {
       return <Navigate to="/login" replace />;
   }
 
-  // Hide Layout for Login Page
-  if (location.pathname === '/login') {
+  // Hide Layout for Login/Showcase Page
+  if (location.pathname === '/login' || location.pathname === '/showcase') {
       return (
           <>
              <div className="fixed top-6 right-6 z-[100] flex flex-col items-end pointer-events-none w-full max-w-md px-4">
@@ -145,8 +147,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-black border-b border-white/10 z-30 flex items-center justify-between px-4">
          <div className="flex items-center gap-2">
-             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-               <Command className="w-5 h-5" />
+             <div className="w-10 h-10">
+               <PunchClockLogo size={40} />
              </div>
              <div>
                 <h1 className="text-lg font-black italic tracking-tighter text-black dark:text-white leading-none">PUNCH<span className="text-blue-500">CLOCK</span></h1>
@@ -184,9 +186,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </button>
 
           {/* Logo Area */}
-          <div className={`flex items-center gap-3 h-20 px-6 border-b border-white/5 ${isCollapsed ? 'justify-center px-0' : ''}`}>
-              <div className="w-10 h-10 shrink-0 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                 <Command className="w-6 h-6 text-white" />
+          <div className={`flex items-center gap-3 h-24 px-6 border-b border-white/5 ${isCollapsed ? 'justify-center px-0' : ''}`}>
+              <div className="w-12 h-12 shrink-0">
+                 <PunchClockLogo size={48} />
                </div>
                {!isCollapsed && (
                  <div className="overflow-hidden whitespace-nowrap">
@@ -200,6 +202,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           
           {/* Navigation */}
           <nav className="flex-1 px-3 py-6 overflow-y-auto space-y-1 relative scrollbar-hide">
+            <NavItem 
+                to="/showcase"
+                icon={MonitorPlay}
+                label="Product Showcase"
+                colorClass="bg-blue-600"
+                onClick={() => setIsMobileMenuOpen(false)}
+                isCollapsed={isCollapsed}
+            />
+            <div className="my-2 border-t border-white/5"></div>
             {filteredNav.map(item => (
               <NavItem 
                 key={item.to} 

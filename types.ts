@@ -8,6 +8,7 @@ export interface CompanyProfile {
   website: string;
   logoUrl?: string; // Base64
   letterheadUrl?: string; // Base64 for document background
+  dashboardBgUrl?: string; // New: AI-generated wallpaper
   leavePolicies?: LeavePolicy[];
   policies?: string; // Markdown text for general handbook
   businessType?: 'Corporate' | 'F&B' | 'Retail' | 'Healthcare' | 'Logistics' | 'Technology'; // New: AI Context

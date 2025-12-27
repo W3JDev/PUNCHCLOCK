@@ -1,9 +1,9 @@
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { AiAssistant } from './components/AiAssistant';
-import { GlobalProvider } from './context/GlobalContext';
+import { GlobalProvider, useGlobal } from './context/GlobalContext';
 import { Loader2 } from 'lucide-react';
 
 // Lazy Load Pages to reduce initial bundle size (Performance)
@@ -17,6 +17,7 @@ const Onboarding = React.lazy(() => import('./pages/Onboarding').then(module => 
 const Login = React.lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
 const UserGuide = React.lazy(() => import('./pages/UserGuide').then(module => ({ default: module.UserGuide })));
 const ProductDemo = React.lazy(() => import('./pages/ProductDemo').then(module => ({ default: module.ProductDemo })));
+const Showcase = React.lazy(() => import('./pages/Showcase').then(module => ({ default: module.Showcase })));
 const Organization = React.lazy(() => import('./pages/Organization').then(module => ({ default: module.Organization })));
 const Documents = React.lazy(() => import('./pages/Documents').then(module => ({ default: module.Documents })));
 
@@ -28,15 +29,32 @@ const PageLoader = () => (
   </div>
 );
 
+// Internal Component to handle global background logic
+const GlobalThemeHandler = () => {
+    const { companyProfile } = useGlobal();
+    
+    useEffect(() => {
+        if (companyProfile.dashboardBgUrl) {
+            document.documentElement.style.setProperty('--custom-bg', `url(${companyProfile.dashboardBgUrl})`);
+        } else {
+            document.documentElement.style.setProperty('--custom-bg', 'none');
+        }
+    }, [companyProfile.dashboardBgUrl]);
+
+    return null;
+};
+
 function App() {
   return (
     <GlobalProvider>
+      <GlobalThemeHandler />
       <HashRouter>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Public Routes without Layout */}
             <Route path="/login" element={<Login />} />
             <Route path="/demo" element={<ProductDemo />} />
+            <Route path="/showcase" element={<Showcase />} />
             
             {/* Protected Routes with Layout */}
             <Route path="/*" element={

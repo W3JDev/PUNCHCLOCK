@@ -1,51 +1,24 @@
 
 # 🚀 Product Roadmap: PUNCH⏰CLOCK Malaysia
 
-## ✅ Completed (v2.2 - Current Release)
+## ✅ Completed (v2.5 - Quantum Core)
+*   **High-Entropy Data**: Medium business dataset support (50+ staff).
+*   **Forensic History**: 6-month historical auditing window.
+*   **Agentic Workspace**: Collapsible side-deck for expert AI consulting.
+*   **Biometric Liveness**: Anti-spoofing challenge-response protocol.
+*   **Statutory Precision**: LHDN 2025 MTD tiers & EPF RM20k ceilings.
+*   **Itemized Claims**: Claims-to-payroll automated integration.
 
-*   **User Interface**
-    *   [x] **Neo-Brutalist Design System:** High contrast, accessible, modern UI.
-    *   [x] **Bento Grid Dashboard:** Fully customizable drag-and-drop widget layout.
-    *   [x] **Dark Mode:** System-wide dark/light theme toggle.
+## 🚧 In Progress (v2.8 - Connectivity)
+*   **Mobile Push**: PWA Service Worker push notifications for shift alerts.
+*   **PDF Intelligence**: AI-powered OCR for reading Medical Certificates (MC).
+*   **Multi-Tenancy**: Architecture prep for SaaS company-isolation.
 
-*   **Core Functionality**
-    *   [x] **Statutory Payroll:** Auto-calculation of EPF, SOCSO, EIS, and PCB.
-    *   [x] **Biometric Kiosk:** Face detection integration via `face-api.js`.
-    *   [x] **Anti-Spoofing:** GPS Geofencing and emulator detection.
-    *   [x] **Org Chart:** Interactive visual hierarchy of employees.
-
-*   **AI Integration**
-    *   [x] **Adaptive Agent:** AI learns user preferences over time.
-    *   [x] **Visual Responses:** AI can generate charts and tables on demand.
-    *   [x] **Compliance Audit:** Auto-scan for Employment Act 1955 violations.
-    *   [x] **Auto-Rostering:** AI generates shift schedules based on business type.
-    *   [x] **SOS Handler:** AI recommends replacements for no-shows.
-    *   [x] **Document Drafter:** AI writes contracts and warning letters.
+## 🔭 Future Horizons (v3.0 - Scaling)
+*   **Database Migration**: LocalStorage → Supabase (PostgreSQL).
+*   **Hardware Bridge**: Integration with physical USB/NFC card readers.
+*   **EWA Engine**: Earned Wage Access with TNG eWallet.
+*   **WhatsApp AI**: Apply for leave and view payslips via WhatsApp Chat.
 
 ---
-
-## 🚧 In Progress (v2.5 - Hardening)
-
-*   **Data Layer**
-    *   [ ] **Cloud Sync:** Replace LocalStorage with Supabase (PostgreSQL) for multi-device sync.
-    *   [ ] **Secure Auth:** Implement JWT-based login/session management.
-
-*   **Mobile**
-    *   [ ] **PWA Push Notifications:** Enable Service Worker push API for shift reminders.
-    *   [ ] **Native Wrapper:** Capacitor build for Play Store deployment.
-
----
-
-## 🔭 Future Horizons (v3.0+)
-
-### 📱 The "Super App" Vision
-*   **Earned Wage Access (EWA):** Integration with TNG eWallet for daily salary withdrawal.
-*   **WhatsApp Bot:** Full 2-way communication via WhatsApp (Apply leave via chat).
-
-### 🧠 Advanced AI
-*   **Predictive Analytics:** Forecast staff turnover risk based on attendance patterns.
-*   **Sentiment Analysis:** Analyze staff feedback and morale.
-
-### 🏢 Enterprise
-*   **Multi-Tenant SaaS:** Support for payroll outsourcing firms managing multiple companies.
-*   **Hardware Integration:** Support for thermal receipt printers for physical shift clock-ins.
+*Target Release v3.0: Q4 2025*

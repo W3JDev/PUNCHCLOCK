@@ -52,12 +52,15 @@
             boxShadow: {
               'hard': '4px 4px 0px 0px #ffffff',
               'hard-sm': '2px 2px 0px 0px #ffffff',
-              'glow': '0 0 20px rgba(255, 255, 255, 0.5)',
+              'glow': '0 0 30px rgba(59, 130, 246, 0.4)',
+              'glow-yellow': '0 0 30px rgba(234, 179, 8, 0.4)',
+              'glow-red': '0 0 30px rgba(239, 68, 68, 0.4)',
             },
             animation: {
               'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'sound-wave': 'soundWave 1.2s ease-in-out infinite',
               'scan-line': 'scanLine 2s linear infinite',
+              'blob': 'blob 7s infinite',
             },
             keyframes: {
               soundWave: {
@@ -68,6 +71,12 @@
                 '0%': { top: '0%' },
                 '50%': { top: '100%' },
                 '100%': { top: '0%' }
+              },
+              blob: {
+                '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                '100%': { transform: 'translate(0px, 0px) scale(1)' }
               }
             }
           }
@@ -76,7 +85,7 @@
     </script>
     <style>
       :root {
-        /* font-size: 16px; Default browser standard */
+        --custom-bg: none;
       }
       
       body {
@@ -96,11 +105,22 @@
         width: 100vw;
         height: 100vh;
         z-index: -1;
-        background: #050505;
+        background: var(--custom-bg), #050505;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-blend-mode: overlay;
+      }
+
+      #bg-gradient::after {
+        content: '';
+        position: absolute;
+        inset: 0;
         background-image: 
           linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
           linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
         background-size: 40px 40px;
+        pointer-events: none;
       }
 
       *:focus-visible {
@@ -110,7 +130,7 @@
 
       ::-webkit-scrollbar { width: 8px; }
       ::-webkit-scrollbar-track { background: #1a1a1a; }
-      ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
       ::-webkit-scrollbar-thumb:hover { background: #fff; }
 
       .paper-preview {
@@ -120,6 +140,9 @@
         line-height: 1.5;
         box-shadow: 0 0 20px rgba(0,0,0,0.5);
       }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
   <script type="importmap">
 {

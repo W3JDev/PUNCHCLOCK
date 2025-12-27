@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
 import { NeoCard, NeoButton, NeoInput, NeoSelect } from '../components/NeoComponents';
-import { Building2, FileText, Calendar, Plus, Trash2, Save, Image, Upload, Sparkles, Loader2 } from 'lucide-react';
+import { Building2, FileText, Calendar, Plus, Trash2, Save, Image, Upload, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { CompanyEvent } from '../types';
-import { generateHRDocument } from '../services/geminiService';
+import { generateHRDocument, generateDashboardWallpaper } from '../services/geminiService';
 
 export const Organization: React.FC = () => {
   const { currentUser, companyProfile, updateCompanyProfile, events, addEvent, deleteEvent, addNotification } = useGlobal();
@@ -12,6 +12,9 @@ export const Organization: React.FC = () => {
   const [newEvent, setNewEvent] = useState<Partial<CompanyEvent>>({ type: 'Meeting' });
   const [isGeneratingPolicy, setIsGeneratingPolicy] = useState(false);
   const [policyTopic, setPolicyTopic] = useState('');
+  
+  const [isGeneratingWallpaper, setIsGeneratingWallpaper] = useState(false);
+  const [wallpaperPrompt, setWallpaperPrompt] = useState('Abstract circuit lines and geometric blocks representing data flow');
 
   // Access Control
   if (currentUser?.role === 'Staff' || currentUser?.role === 'Manager') {
@@ -78,6 +81,19 @@ export const Organization: React.FC = () => {
       addNotification("Policy clause appended", "success");
   };
 
+  const handleGenerateWallpaper = async () => {
+    setIsGeneratingWallpaper(true);
+    addNotification("AI is crafting your custom workspace...", "info");
+    const imgUrl = await generateDashboardWallpaper(wallpaperPrompt);
+    if (imgUrl) {
+      updateCompanyProfile({ ...companyProfile, dashboardBgUrl: imgUrl });
+      addNotification("New Dashboard Wallpaper Applied!", "success");
+    } else {
+      addNotification("Wallpaper generation failed.", "error");
+    }
+    setIsGeneratingWallpaper(false);
+  };
+
   return (
     <div className="space-y-8 pb-20">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -100,35 +116,80 @@ export const Organization: React.FC = () => {
 
         {activeTab === 'branding' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <NeoCard title="Brand Assets" className="border-l-4 border-indigo-500">
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">Company Logo</label>
-                            <div className="flex items-center gap-4">
-                                <div className="w-24 h-24 bg-gray-50 dark:bg-white rounded-xl flex items-center justify-center border-2 border-gray-200 dark:border-white/20 overflow-hidden">
-                                    {companyProfile.logoUrl ? <img src={companyProfile.logoUrl} className="w-full h-full object-contain"/> : <Building2 className="w-8 h-8 text-gray-300"/>}
+                <div className="space-y-8">
+                    <NeoCard title="Brand Assets" className="border-l-4 border-indigo-500">
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Company Logo</label>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-24 h-24 bg-gray-50 dark:bg-white rounded-xl flex items-center justify-center border-2 border-gray-200 dark:border-white/20 overflow-hidden">
+                                        {companyProfile.logoUrl ? <img src={companyProfile.logoUrl} className="w-full h-full object-contain"/> : <Building2 className="w-8 h-8 text-gray-300"/>}
+                                    </div>
+                                    <div className="flex-1">
+                                        <input type="file" id="logo-upload" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                        <label htmlFor="logo-upload" className="cursor-pointer inline-flex items-center gap-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 px-4 py-2 rounded-lg text-sm text-black dark:text-white font-bold transition-colors">
+                                            <Upload className="w-4 h-4" /> Upload Logo
+                                        </label>
+                                        <p className="text-[10px] text-gray-500 mt-2">Recommended: 512x512 PNG transparent.</p>
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <input type="file" id="logo-upload" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                                    <label htmlFor="logo-upload" className="cursor-pointer inline-flex items-center gap-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 px-4 py-2 rounded-lg text-sm text-black dark:text-white font-bold transition-colors">
-                                        <Upload className="w-4 h-4" /> Upload Logo
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Document Letterhead</label>
+                                <div className="w-full h-32 bg-gray-50 dark:bg-white rounded-xl flex items-center justify-center border-2 border-gray-200 dark:border-white/20 overflow-hidden relative">
+                                    {companyProfile.letterheadUrl && <img src={companyProfile.letterheadUrl} className="absolute inset-0 w-full h-full object-cover opacity-50"/>}
+                                    <input type="file" id="head-upload" className="hidden" accept="image/*" onChange={handleLetterheadUpload} />
+                                    <label htmlFor="head-upload" className="cursor-pointer z-10 inline-flex items-center gap-2 bg-black/50 hover:bg-black/70 px-4 py-2 rounded-lg text-sm text-white font-bold backdrop-blur-sm transition-colors">
+                                        <Image className="w-4 h-4" /> Upload Banner
                                     </label>
-                                    <p className="text-[10px] text-gray-500 mt-2">Recommended: 512x512 PNG transparent.</p>
                                 </div>
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">Document Letterhead</label>
-                            <div className="w-full h-32 bg-gray-50 dark:bg-white rounded-xl flex items-center justify-center border-2 border-gray-200 dark:border-white/20 overflow-hidden relative">
-                                {companyProfile.letterheadUrl && <img src={companyProfile.letterheadUrl} className="absolute inset-0 w-full h-full object-cover opacity-50"/>}
-                                <input type="file" id="head-upload" className="hidden" accept="image/*" onChange={handleLetterheadUpload} />
-                                <label htmlFor="head-upload" className="cursor-pointer z-10 inline-flex items-center gap-2 bg-black/50 hover:bg-black/70 px-4 py-2 rounded-lg text-sm text-white font-bold backdrop-blur-sm transition-colors">
-                                    <Image className="w-4 h-4" /> Upload Banner
-                                </label>
+                    </NeoCard>
+
+                    <NeoCard title="AI Workspace Engine" className="border-l-4 border-pink-500 overflow-hidden relative">
+                        <div className="space-y-4">
+                            <div className="bg-pink-50 dark:bg-pink-900/10 p-4 rounded-xl border border-pink-100 dark:border-pink-500/20">
+                                <h4 className="font-bold text-pink-600 dark:text-pink-400 text-sm mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4"/> Custom AI Wallpaper</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Generate a unique Neo-Brutalist background for your SME dashboard.</p>
                             </div>
+
+                            <div className="flex flex-col gap-3">
+                                <textarea 
+                                    value={wallpaperPrompt} 
+                                    onChange={e => setWallpaperPrompt(e.target.value)}
+                                    className="w-full bg-white dark:bg-black border-2 border-gray-200 dark:border-white/10 rounded-xl p-3 text-xs font-bold focus:border-pink-500 outline-none"
+                                    rows={2}
+                                    placeholder="Enter visual theme..."
+                                />
+                                <NeoButton 
+                                    onClick={handleGenerateWallpaper} 
+                                    disabled={isGeneratingWallpaper}
+                                    className="bg-pink-600 border-pink-400 hover:bg-pink-500 py-3"
+                                >
+                                    {isGeneratingWallpaper ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <RefreshCw className="w-4 h-4 mr-2"/>}
+                                    {isGeneratingWallpaper ? 'Crafting Image...' : 'Generate Wallpaper'}
+                                </NeoButton>
+                            </div>
+
+                            {companyProfile.dashboardBgUrl && (
+                                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/10">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Current Active Skin</p>
+                                    <div className="aspect-video w-full rounded-xl border-2 border-black dark:border-white overflow-hidden relative shadow-lg">
+                                        <img src={companyProfile.dashboardBgUrl} className="w-full h-full object-cover" />
+                                        <button 
+                                            onClick={() => updateCompanyProfile({ ...companyProfile, dashboardBgUrl: undefined })}
+                                            className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-lg shadow-xl"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                </NeoCard>
+                    </NeoCard>
+                </div>
+
                 <NeoCard title="Company Details" className="border-l-4 border-blue-500">
                     <div className="space-y-4">
                         <NeoInput placeholder="Company Name" value={companyProfile.name} onChange={e => updateCompanyProfile({...companyProfile, name: e.target.value})} />

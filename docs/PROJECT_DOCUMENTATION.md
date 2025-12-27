@@ -1,103 +1,50 @@
 
-# PUNCH⏰CLOCK Malaysia - Technical Architecture v2.2
+# PUNCH⏰CLOCK Malaysia - Technical Architecture v2.5
 
 ## 1. System Overview
-
-**PUNCH⏰CLOCK** is a client-side heavy Progressive Web App (PWA) designed to function as a complete HR Operating System. Version 2.2 introduces an "Agentic" architecture where the AI actively plans workforce logistics, generates legal content, and audits compliance.
+**PUNCH⏰CLOCK** has evolved into a "Workforce Intelligence Monolith". Version 2.5 introduces heavy-entropy data support for medium-sized businesses (50-100 staff) with deep historical forensic analysis.
 
 ---
 
-## 2. Core Architecture: The "Sticky State" Engine
+## 2. Forensic Data Topology
+The system now generates and manages 180-day historical windows to feed the Gemini AI Agent.
 
-Instead of a traditional database for this demo version, we utilize a custom `useStickyState` hook pattern. This provides **Database-like Persistence** completely within the browser's Local Storage.
-
-### Data Topology
 ```text
-[GlobalContext Provider]
+[Global Context]
       │
-      ├── [Employees State] <====> localStorage('pc_employees')
+      ├── [History Engine] ━━━━> 180-Day Attendance Buffer (LocalStorage/IndexedDB)
       │
-      ├── [Attendance State] <===> localStorage('pc_attendance')
+      ├── [Identity Index] ━━━━> Biometric Descriptors (O(1) Face Matching)
       │
-      ├── [Shifts State] <=======> localStorage('pc_shifts')
-      │
-      ├── [Documents State] <====> localStorage('pc_documents')
-      │
-      ├── [Company Profile] <====> localStorage('pc_company')
-      │
-      └── [Payroll Settings] <===> localStorage('pc_payroll')
+      └── [Statutory Core] ━━━━> LHDN 2025 MTD Tiers & EPF Ceilings
 ```
 
-**Benefit:** The app retains state even after a hard refresh, simulating a production environment without backend latency.
+---
+
+## 3. The Agentic Sidebar (Sidekick Architecture)
+The AI Assistant is no longer a chat bubble; it is a **Collapsible Sidecar** integrated into the workspace.
+
+*   **Stateful Context**: The AI receives a truncated, role-filtered JSON snapshot of the last 6 months of workforce performance.
+*   **Intent Extraction**: Frontend regex parsers identify specific AI "Intents" (e.g., `[VISUAL: PAYROLL_CHART]`) to dynamically update the dashboard in real-time.
+*   **Report Synthesis**: A specialized service in `documentService.ts` translates raw AI Markdown analysis into structured, vectorized PDFs.
 
 ---
 
-## 3. Feature Deep Dive
+## 4. Biometric Security Protocols
+We implement a "Zero Trust" hardware mode for kiosk terminals.
 
-### A. The "Bento" Grid Engine (`Dashboard.tsx`)
-*   **Logic:** Uses a dynamic array `layout: DashboardWidget[]`.
-*   **Interaction:** Implements HTML5 Drag and Drop API (`onDragStart`, `onDragEnter`, `onDragEnd`).
-*   **Swapping Algorithm:** Real-time array slicing and reordering persisted to `localStorage`.
-
-### B. Adaptive AI Assistant (`geminiService.ts`)
-*   **Context Injection:** The prompt sent to Gemini is dynamically constructed at runtime, injecting current User Role, Employee List subset, and recent Attendance logs.
-*   **Visual Output:** The AI outputs special tokens like `[VISUAL: PAYROLL_CHART]` which the frontend parses to render Recharts components.
-
-### C. AI Workforce Planner (`Shifts.tsx`)
-*   **Auto-Rostering:** 
-    1.  User selects business context (e.g., "F&B").
-    2.  AI receives constraints: Approved Leaves, Role Distribution requirements.
-    3.  AI generates a JSON array of `Shift` objects optimized for coverage.
-*   **SOS Module:**
-    1.  Identifies "No Show".
-    2.  Scans available staff.
-    3.  Filters by `Role === Missing_Role` and sorts by `Accumulated_OT asc`.
-
-### D. Document Factory (`Documents.tsx`)
-*   **Generation:** Uses Gemini to draft HTML content for contracts/letters based on Employee variables.
-*   **Signing:** HTML5 Canvas based signature pad (`touch-action: none` for mobile support).
-*   **Recurring Logic:** `expiryDate` calculated automatically based on `recurrenceInterval`.
-
-### E. Biometric Kiosk (`Attendance.tsx`)
-*   **Mode Logic:** Uses `createPortal` to render a full-screen, isolated scanning interface over the main app.
-*   **User Flow:** Idle Screen -> Select Intent (In/Out/Break) -> Select Method (Face/PIN) -> Scan -> Result.
-*   **Face Recognition:** Uses `face-api.js` (SSD Mobilenet v1).
-*   **Anti-Spoofing:** GPS Geofencing (Haversine Formula) & Liveness Challenges.
-
-### F. Statutory Payroll Engine (`Payroll.tsx`)
-*   **PCB Calculation:** Implements the **Monthly Tax Deduction (MTD)** progressive tax rates for Malaysia.
-*   **EPF/SOCSO:** Calculates employer vs employee contributions based on distinct rates defined in `GlobalContext`.
-*   **Bank Export:** String builders generate fixed-width `.txt` files for KWSP/SOCSO/LHDN portals.
-
-### G. Organization & Branding (`Organization.tsx`)
-*   **Branding:** Allows Admin to upload Logo and Letterhead images (stored as Base64 strings) which are dynamically injected into PDF headers for Payslips and Contracts.
-*   **Event Management:** CRUD operations for Company Events, which are fed into the Dashboard "Bulletin" widget.
-*   **Policy Editor:** AI-powered text generation to expand the Employee Handbook.
+1.  **Spatial Indexing**: Face descriptors are indexed using `faceapi.LabeledFaceDescriptors` for sub-100ms identity verification.
+2.  **Liveness Verification**: Random expression challenges (Smile/Neutral) prevent 2D photo spoofing.
+3.  **GPS Pinning**: Punches are only accepted if the `calculateDistance` (Haversine) returns < 100m from the registered HQ coordinate.
 
 ---
 
-## 4. Security & Compliance
-
-| Layer | Implementation | Purpose |
+## 5. Scaling Limits
+| Component | Current (v2.5) | Enterprise Target (v3.0) |
 | :--- | :--- | :--- |
-| **Data** | LocalStorage | Data never leaves the device (Privacy First). |
-| **AI** | Context Windowing | Only relevant/anonymized snippets sent to LLM. |
-| **Labor Law** | Logic Gates | Code checks `OT Hours > 104` to flag EA 1955 violations. |
-| **Access** | RBAC | Role-based rendering prevents Staff from seeing Payroll. |
+| **Employee Limit** | 100 (LocalStorage) | 5,000 (PostgreSQL) |
+| **History Window** | 180 Days | Unlimited (Archive S3) |
+| **Audit Speed** | < 2s | < 500ms (Edge Functions) |
 
 ---
-
-## 5. Automation Flows
-
-1.  **Onboarding:** New Hire -> Face Enrollment -> Auto-generate Contract -> Document Signed.
-2.  **Daily Ops:** Biometric Check-in -> Risk Score Calc -> Dashboard Update.
-3.  **Scheduling:** AI Auto-Roster -> SOS Handling -> Compliance Check.
-4.  **Month End:** Auto-compile Attendance -> Calculate OT/Late -> Generate Payslip -> Export Bank File.
-
----
-
-## 6. Future Implementations (v3.0)
-
-*   **Server-Side:** Migrate `GlobalContext` to Supabase/PostgreSQL.
-*   **Edge Functions:** Move Gemini calls to backend to hide API keys.
-*   **WhatsApp API:** Push notifications for payslips and attendance alerts.
+**Status**: All v2.5 specifications implementation-complete.

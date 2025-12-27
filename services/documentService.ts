@@ -5,12 +5,58 @@ import { CompanyProfile, Employee, PayrollEntry } from "../types";
 declare const jspdf: any;
 
 /**
- * Helper to add bold text inline (simplified simulation) or block text
+ * Helper to add wrapped text
  */
 const addWrappedText = (doc: any, text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
   const splitText = doc.splitTextToSize(text, maxWidth);
   doc.text(splitText, x, y);
   return y + (splitText.length * lineHeight);
+};
+
+/**
+ * Procedural Table Renderer for AI Reports
+ * Draws a professional grid from markdown table data
+ */
+const drawReportTable = (doc: any, tableData: string[][], startY: number, margin: number, textWidth: number) => {
+    const colCount = tableData[0].length;
+    const colWidth = textWidth / colCount;
+    const cellPadding = 3;
+    let currentY = startY;
+    const rowHeight = 10;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    
+    // Header Row
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, currentY, textWidth, rowHeight, 'F');
+    tableData[0].forEach((cell, i) => {
+        doc.text(cell.toUpperCase(), margin + (i * colWidth) + cellPadding, currentY + 7);
+    });
+    
+    currentY += rowHeight;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    // Data Rows
+    tableData.slice(1).forEach((row) => {
+        // Handle page overflow
+        if (currentY > 260) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        row.forEach((cell, i) => {
+            const cleanCell = cell.replace(/\*\*/g, '');
+            doc.text(cleanCell, margin + (i * colWidth) + cellPadding, currentY + 7);
+        });
+
+        doc.setDrawColor(230);
+        doc.line(margin, currentY + rowHeight, margin + textWidth, currentY + rowHeight);
+        currentY += rowHeight;
+    });
+
+    return currentY + 10;
 };
 
 // Helper for Footer
@@ -25,6 +71,114 @@ const addW3jDevFooter = (doc: any, pageHeight: number, margin: number) => {
     }
 };
 
+/**
+ * Generates a formal AI-driven HR Intelligence Report
+ */
+export const generateAIReportPDF = (
+    content: string,
+    company: CompanyProfile,
+    author: string
+) => {
+    const { jsPDF } = jspdf;
+    const doc = new jsPDF();
+    const PAGE_HEIGHT = 297;
+    const MARGIN = 20;
+    const TEXT_WIDTH = 170;
+    const LINE_HEIGHT = 8;
+
+    let y = 20;
+
+    // 1. Executive Header
+    doc.setFillColor(5, 5, 5); // Brutalist Dark
+    doc.rect(0, 0, 210, 50, 'F');
+    
+    if (company.logoUrl) {
+        try { doc.addImage(company.logoUrl, 'PNG', MARGIN, 10, 25, 25); } catch (e) {}
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("HR INTELLIGENCE REPORT", 60, 25);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`CONFIDENTIAL | ${company.name} | ${new Date().toLocaleDateString()}`, 60, 32);
+    
+    y = 65;
+    doc.setTextColor(0, 0, 0);
+
+    // 2. Report metadata
+    doc.setFont("helvetica", "bold");
+    doc.text("PREPARED BY:", MARGIN, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`PUNCHCLOCK AI AGENT (Certified for Malaysia Law)`, MARGIN + 40, y);
+    y += LINE_HEIGHT;
+    doc.setFont("helvetica", "bold");
+    doc.text("REQUESTED BY:", MARGIN, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(author, MARGIN + 40, y);
+    y += 15;
+
+    // 3. Content Parsing
+    const lines = content.split('\n');
+    let tableBuffer: string[][] = [];
+
+    lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+
+        // Detect Table
+        if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+            const cells = trimmed.split('|').map(s => s.trim()).filter((_, i, arr) => i > 0 && i < arr.length - 1);
+            if (!cells.every(c => c.match(/^[:\-\s]+$/))) {
+                tableBuffer.push(cells);
+            }
+            return;
+        } else if (tableBuffer.length > 0) {
+            y = drawReportTable(doc, tableBuffer, y, MARGIN, TEXT_WIDTH);
+            tableBuffer = [];
+        }
+
+        if (y > PAGE_HEIGHT - 30) {
+            doc.addPage();
+            y = 20;
+        }
+
+        if (trimmed.startsWith('### ')) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            y = addWrappedText(doc, trimmed.replace('### ', '').toUpperCase(), MARGIN, y, TEXT_WIDTH, LINE_HEIGHT) + 4;
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "normal");
+        } else if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+            const clean = trimmed.replace(/^[\*\-]\s/, '• ').replace(/\*\*/g, '');
+            y = addWrappedText(doc, clean, MARGIN + 5, y, TEXT_WIDTH - 5, LINE_HEIGHT);
+        } else if (trimmed !== '') {
+            const clean = trimmed.replace(/\*\*/g, '');
+            y = addWrappedText(doc, clean, MARGIN, y, TEXT_WIDTH, LINE_HEIGHT);
+        } else {
+            y += 4; // Spacer
+        }
+    });
+
+    if (tableBuffer.length > 0) {
+        y = drawReportTable(doc, tableBuffer, y, MARGIN, TEXT_WIDTH);
+    }
+
+    // 4. Legal Footer
+    y += 20;
+    if (y > PAGE_HEIGHT - 40) { doc.addPage(); y = 20; }
+    doc.setDrawColor(200);
+    doc.line(MARGIN, y, MARGIN + 170, y);
+    y += 10;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    const disclaimer = "This report is generated using advanced AI analysis based on internal system logs and the Malaysian Employment Act 1955. This is for advisory purposes and does not constitute formal legal advice.";
+    y = addWrappedText(doc, disclaimer, MARGIN, y, TEXT_WIDTH, 4);
+
+    addW3jDevFooter(doc, PAGE_HEIGHT, MARGIN);
+    return doc.output('bloburl');
+};
+
 export const generateProfessionalPDF = (
   type: 'Warning' | 'Contract' | 'Probation',
   company: CompanyProfile,
@@ -35,7 +189,7 @@ export const generateProfessionalPDF = (
     incidentTime?: string; 
     meetingDate?: string;
     misconductDescription?: string;
-    customClause?: string; // New field for contracts
+    customClause?: string; 
   }
 ) => {
   const { jsPDF } = jspdf;
