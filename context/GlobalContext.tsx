@@ -212,6 +212,25 @@ const INITIAL_PAYROLL_SETTINGS: PayrollSettings = {
   statutoryRates: { epfEmployee: 11, epfEmployer: 13, socso: 0.5, eis: 0.2 }
 };
 
+// Initial Mock Data to ensure Dashboard is populated
+const INITIAL_LEAVES: LeaveRequest[] = [
+    { id: 101, employeeId: 'EMP-1005', name: 'Siti Singh', type: 'Annual Leave', date: '2025-06-15', status: 'Pending', reason: 'Family vacation' },
+    { id: 102, employeeId: 'EMP-1012', name: 'Tan Teoh', type: 'Medical Leave', date: '2025-06-10', status: 'Pending', reason: 'Fever' },
+    { id: 103, employeeId: 'EMP-1020', name: 'Mei Kaur', type: 'Unpaid Leave', date: '2025-06-20', status: 'Pending', reason: 'Personal matters' },
+];
+
+const INITIAL_ANNOUNCEMENTS: Announcement[] = [
+    { id: 'a1', title: 'System Maintenance', content: 'HR Portal will be down for 30 mins this Sunday at 2 AM for upgrades.', date: '2025-06-01', type: 'Alert', author: 'Admin' },
+    { id: 'a2', title: 'Public Holiday', content: 'Office closed for Hari Raya Haji. Enjoy the long weekend!', date: '2025-06-17', type: 'Holiday', author: 'HR' },
+    { id: 'a3', title: 'New SOP: Friday Prayers', content: 'Lunch break extended to 2:30 PM on Fridays effectively immediately.', date: '2025-05-20', type: 'Info', author: 'HR' },
+];
+
+const INITIAL_REQUESTS: GeneralRequest[] = [
+    { id: 'r1', employeeId: 'EMP-1008', employeeName: 'David Wong', type: 'Claim', details: 'Grab receipt RM 45.50 (Client Meeting)', date: '2025-06-02', status: 'Pending' },
+    { id: 'r2', employeeId: 'EMP-1015', employeeName: 'Ramesh Balan', type: 'Claim', details: 'Medical Claim RM 80.00 (Klinik Mediviron)', date: '2025-06-03', status: 'Pending' },
+    { id: 'r3', employeeId: 'EMP-1022', employeeName: 'Sarah Tan', type: 'Claim', details: 'Team Lunch RM 150.00', date: '2025-06-01', status: 'Pending' },
+];
+
 const useStickyState = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
   const [value, setValue] = useState<T>(() => {
     const stickyValue = window.localStorage.getItem(key);
@@ -229,11 +248,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [employees, setEmployees] = useStickyState<Employee[]>('pc_employees', DATA.employees);
   const [attendanceRecords, setAttendanceRecords] = useStickyState<AttendanceRecord[]>('pc_attendance', DATA.attendance);
   const [shifts, setShifts] = useStickyState<Shift[]>('pc_shifts', []);
-  const [leaveRequests, setLeaveRequests] = useStickyState<LeaveRequest[]>('pc_leaves', []);
+  const [leaveRequests, setLeaveRequests] = useStickyState<LeaveRequest[]>('pc_leaves', INITIAL_LEAVES);
   const [companyProfile, setCompanyProfile] = useStickyState<CompanyProfile>('pc_company', INITIAL_COMPANY);
   const [payrollSettings, setPayrollSettings] = useStickyState<PayrollSettings>('pc_payroll', INITIAL_PAYROLL_SETTINGS);
-  const [announcements, setAnnouncements] = useStickyState<Announcement[]>('pc_announcements', []);
-  const [generalRequests, setGeneralRequests] = useStickyState<GeneralRequest[]>('pc_requests', []);
+  const [announcements, setAnnouncements] = useStickyState<Announcement[]>('pc_announcements', INITIAL_ANNOUNCEMENTS);
+  const [generalRequests, setGeneralRequests] = useStickyState<GeneralRequest[]>('pc_requests', INITIAL_REQUESTS);
   const [documents, setDocuments] = useStickyState<CompanyDocument[]>('pc_documents', []);
   const [events, setEvents] = useStickyState<CompanyEvent[]>('pc_events', []);
   const [userPreferences, setUserPreferences] = useStickyState<Record<string, number>>('pc_user_prefs', {});

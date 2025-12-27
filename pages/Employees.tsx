@@ -1,649 +1,327 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Search, X, Clock, MapPin, Calendar as CalendarIcon, CheckCircle, AlertTriangle, XCircle, ArrowRight, User, Briefcase, Hash, Filter, MoreHorizontal, Trash2, ChevronLeft, ChevronRight, Lock, Download, ScanFace, GitFork, Camera, RefreshCcw, LayoutList, History, Award, BookOpen, ShieldAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import { NeoCard, NeoButton, NeoInput, NeoSelect, NeoBadge, NeoModal } from '../components/NeoComponents';
+import { Search, Plus, User, MapPin, Phone, Mail, Calendar, Briefcase, Trash2, CheckCircle, Clock, LayoutGrid, List, MoreHorizontal, FileText, UserPlus, Filter } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
-import { Employee, AttendanceRecord } from '../types';
-import { NeoButton, NeoCard, NeoInput, NeoBadge } from '../components/NeoComponents';
-import { loadFaceModels, detectFace, findDuplicateFace, initializeFaceMatcher } from '../services/faceBiometricService';
-
-// Predefined skills for quick selection
-const COMMON_SKILLS = [
-  "Management", "Labor Law", "Payroll", "Recruitment", // HR
-  "React", "Node.js", "Python", "AWS", "Figma", // IT
-  "Sales", "Negotiation", "CRM", "Marketing", "Mandarin", // Sales
-  "Electrical", "Safety", "Maintenance", "Logistics" // Ops
-];
+import { Employee } from '../types';
 
 export const Employees: React.FC = () => {
-  const { employees, addEmployee, updateEmployee, deleteEmployee, getEmployeeAttendance, t, theme, currentUser, addNotification, updateOnboardingStep } = useGlobal();
+  const { employees, addEmployee, updateEmployee, deleteEmployee, addNotification, currentUser } = useGlobal();
+  const [viewMode, setViewMode] = useState<'List' | 'Grid'>('List');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Selected Employee for Details View
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [isFaceRegMode, setIsFaceRegMode] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'org'>('list');
-  
-  // Tab State for Detail Modal
-  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'onboarding'>('overview');
+  const [activeTab, setActiveTab] = useState<'details' | 'onboarding'>('details');
 
-  // Edit Form State
-  const [formData, setFormData] = useState<Partial<Employee>>({});
-  const [newSkillInput, setNewSkillInput] = useState('');
-  
-  // Video Ref for Face Enrollment
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  // Add/Edit Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [formEmp, setFormEmp] = useState<Partial<Employee>>({});
 
-  // Load models and initialize matcher on mount
-  useEffect(() => {
-      loadFaceModels().then(() => {
-          initializeFaceMatcher(employees);
-      });
-  }, [employees]);
-
-  const filteredEmployees = employees.filter(e => 
+  const filteredEmployees = employees.filter(e =>
     e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.id.includes(searchTerm) ||
+    e.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
     e.department.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = () => {
-    setSelectedEmp(null);
-    setFormData({
-      status: 'Active',
-      role: 'Employee',
-      department: 'General',
-      baseSalary: 0,
-      skills: [],
-      reportsTo: '',
-      pin: Math.floor(100000 + Math.random() * 900000).toString() // Generate random 6-digit PIN
-    });
-    setIsEditMode(true);
+  const handleEditClick = (emp: Employee) => {
+      setFormEmp(emp);
+      setIsEditModalOpen(true);
   };
 
-  const handleEdit = (emp: Employee) => {
-    setSelectedEmp(emp);
-    setFormData({ ...emp });
-    setIsEditMode(true);
+  const handleAddNewClick = () => {
+      setFormEmp({
+          status: 'Active',
+          role: 'Staff',
+          employmentType: 'Permanent',
+          department: 'General',
+          joinDate: new Date().toISOString().split('T')[0]
+      });
+      setIsEditModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name || !formData.id) return alert("Name and ID required");
-    
-    // Ensure baseSalary is a number
-    const finalData = {
-        ...formData,
-        baseSalary: formData.baseSalary || 0
-    } as Employee;
+  const handleSaveEmployee = () => {
+      if (!formEmp.name || !formEmp.email) {
+          addNotification("Name and Email are required.", "error");
+          return;
+      }
 
-    if (selectedEmp && selectedEmp.id === formData.id) {
-      updateEmployee(finalData);
-    } else {
-      addEmployee(finalData);
-    }
-    setIsEditMode(false);
-    if (!selectedEmp) setSelectedEmp(null); 
+      const empPayload: Employee = {
+          id: formEmp.id || `EMP-${Math.floor(Math.random() * 100000)}`,
+          name: formEmp.name!,
+          email: formEmp.email!,
+          role: formEmp.role || 'Staff',
+          department: formEmp.department || 'General',
+          status: formEmp.status || 'Active',
+          employmentType: formEmp.employmentType || 'Permanent',
+          baseSalary: formEmp.baseSalary || 2000,
+          joinDate: formEmp.joinDate || new Date().toISOString().split('T')[0],
+          nric: formEmp.nric,
+          phone: formEmp.phone || '', // Assuming phone exists in Employee type or used as placeholder
+          // Preserve existing fields if editing
+          ...(formEmp.id ? employees.find(e => e.id === formEmp.id) : {}),
+          ...formEmp
+      } as Employee;
+
+      if (formEmp.id) {
+          updateEmployee(empPayload);
+      } else {
+          addEmployee(empPayload);
+      }
+      setIsEditModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
-    if(window.confirm("Are you sure? This action is irreversible.")) {
-      deleteEmployee(id);
-      setSelectedEmp(null);
-    }
-  };
-
-  // Start Camera for Enrollment
-  useEffect(() => {
-      if (isFaceRegMode) {
-          navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-              streamRef.current = stream;
-              if (videoRef.current) {
-                  videoRef.current.srcObject = stream;
-                  videoRef.current.play();
-              }
-          }).catch(err => console.error("Cam Error", err));
-      } else {
-          // Stop camera
-          if (streamRef.current) {
-              streamRef.current.getTracks().forEach(track => track.stop());
-              streamRef.current = null;
-          }
+      if (confirm("Are you sure you want to remove this employee?")) {
+          deleteEmployee(id);
+          if (selectedEmp?.id === id) setSelectedEmp(null);
       }
-  }, [isFaceRegMode]);
-
-  const captureFace = async () => {
-     if (!videoRef.current) return;
-     
-     addNotification("Scanning for unique biometric signature...", "info");
-     const detection = await detectFace(videoRef.current);
-     
-     if (detection) {
-        // SECURITY: Check for duplicates before enrolling
-        const { isDuplicate, matchedId } = findDuplicateFace(detection.descriptor, formData.id);
-        
-        if (isDuplicate) {
-            const matchedEmp = employees.find(e => e.id === matchedId);
-            addNotification(`IDENTITY CONFLICT: This face is already registered to ${matchedEmp?.name} (${matchedId}). Enrollment blocked for security.`, "error");
-            return;
-        }
-
-        // Convert Float32Array to standard array for JSON storage
-        const descriptorArray = Array.from(detection.descriptor) as number[];
-        setFormData(prev => ({ 
-            ...prev, 
-            faceRegistered: true,
-            faceDescriptor: descriptorArray
-        }));
-        setIsFaceRegMode(false);
-        addNotification("Secure Face ID Captured Successfully", "success");
-     } else {
-         addNotification("No face detected. Please center your face in the frame.", "error");
-     }
   };
-
-  const handleResetOnboarding = (empId: string) => {
-    if (window.confirm("Reset onboarding progress for this employee?")) {
-        updateOnboardingStep(empId, 0);
-        addNotification("Onboarding reset to Step 0.", "info");
-        // Update local selected state
-        if (selectedEmp) setSelectedEmp({ ...selectedEmp, onboardingStep: 0 });
-    }
-  };
-
-  const handleCompleteOnboarding = (empId: string) => {
-    updateOnboardingStep(empId, 4);
-    if (selectedEmp) setSelectedEmp({ ...selectedEmp, onboardingStep: 4 });
-  };
-
-  // Skills Logic
-  const toggleSkill = (skill: string) => {
-    const currentSkills = formData.skills || [];
-    if (currentSkills.includes(skill)) {
-      setFormData({ ...formData, skills: currentSkills.filter(s => s !== skill) });
-    } else {
-      setFormData({ ...formData, skills: [...currentSkills, skill] });
-    }
-  };
-
-  const addCustomSkill = () => {
-    if (newSkillInput.trim()) {
-       const currentSkills = formData.skills || [];
-       if (!currentSkills.includes(newSkillInput.trim())) {
-         setFormData({ ...formData, skills: [...currentSkills, newSkillInput.trim()] });
-       }
-       setNewSkillInput('');
-    }
-  };
-
-  const getDeptStyle = (dept: string) => {
-    switch(dept) {
-      case 'HR': return 'from-red-500 to-pink-600';
-      case 'IT': return 'from-blue-500 to-indigo-600';
-      case 'Sales': return 'from-orange-500 to-yellow-500';
-      case 'Ops': return 'from-purple-500 to-violet-600';
-      default: return 'from-slate-500 to-zinc-500';
-    }
-  };
-
-  // Recursive Org Chart
-  const renderOrgTree = (managerId: string) => {
-     const reports = employees.filter(e => e.reportsTo === managerId);
-     if (reports.length === 0) return null;
-     return (
-        <div className="flex flex-col items-center">
-           <div className="w-px h-6 bg-gray-300 dark:bg-white/20"></div>
-           <div className="flex gap-8 border-t border-gray-300 dark:border-white/20 pt-6 px-4">
-              {reports.map(emp => (
-                 <div key={emp.id} className="flex flex-col items-center">
-                    <div className="p-4 rounded-xl bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 shadow-lg flex flex-col items-center min-w-[150px] cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors" onClick={() => setSelectedEmp(emp)}>
-                       <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-xs font-black text-white mb-2">{emp.name.charAt(0)}</div>
-                       <span className="font-bold text-gray-900 dark:text-white text-xs text-center">{emp.name}</span>
-                       <span className="text-[10px] text-gray-500 uppercase">{emp.role}</span>
-                    </div>
-                    {renderOrgTree(emp.id)}
-                 </div>
-              ))}
-           </div>
-        </div>
-     );
-  };
-
-  const attendanceHistory = selectedEmp ? getEmployeeAttendance(selectedEmp.id) : [];
 
   return (
-    <div className={`min-h-full transition-colors duration-300`}>
-      
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-         <div className={`absolute top-[10%] left-[20%] w-[500px] h-[500px] rounded-full blur-[100px] opacity-10 animate-blob bg-purple-900`}></div>
-      </div>
-
-      <div className="relative z-10 max-w-[1600px] mx-auto pb-20">
+    <div className="space-y-8 animate-in fade-in pb-20 w-full max-w-[1600px] mx-auto">
         
-        <div className="relative overflow-hidden flex flex-col md:flex-row justify-between md:items-end gap-6 bg-white dark:bg-[#121212]/80 backdrop-blur-2xl border border-gray-200 dark:border-white/10 p-8 rounded-3xl shadow-sm dark:shadow-glossy-card mb-10 transition-colors">
-           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-transparent pointer-events-none"></div>
-           <div>
-             <div className="flex items-center gap-3 mb-2">
-               <div className="h-8 w-1 rounded-full bg-gradient-to-b from-blue-400 to-purple-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]"></div>
-               <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-500 dark:text-slate-400 drop-shadow-sm">Human Resources</h2>
-             </div>
-             <h1 className="text-6xl font-black tracking-tighter leading-none mb-2 text-black dark:text-white drop-shadow-md">
-               TEAM<span className="text-blue-500">.</span>
-             </h1>
-           </div>
-           
-           <div className="flex gap-4">
-             <button onClick={() => setViewMode('list')} className={`p-3 rounded-xl border ${viewMode === 'list' ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-gray-500 border-gray-200 dark:border-white/10'}`}><User className="w-5 h-5" /></button>
-             <button onClick={() => setViewMode('org')} className={`p-3 rounded-xl border ${viewMode === 'org' ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-gray-500 border-gray-200 dark:border-white/10'}`}><GitFork className="w-5 h-5" /></button>
-             {currentUser.role !== 'Manager' && (
-               <button onClick={handleCreate} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-black uppercase text-sm shadow-lg hover:bg-blue-700 transition-colors">
-                 <Plus className="w-5 h-5" /> New Hire
-               </button>
-             )}
-           </div>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white dark:bg-[#121212] p-8 rounded-[3rem] border border-gray-200 dark:border-white/10 shadow-sm">
+            <div>
+                <h1 className="text-5xl font-black text-black dark:text-white uppercase tracking-tighter">Team<span className="text-purple-600">.</span></h1>
+                <p className="text-gray-500 font-bold mt-2">Manage your workforce profile.</p>
+            </div>
+            <div className="flex gap-4">
+                <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl border border-gray-200 dark:border-white/10">
+                    <button onClick={() => setViewMode('List')} className={`p-3 rounded-lg transition-all ${viewMode === 'List' ? 'bg-white text-black shadow-md' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><List className="w-5 h-5"/></button>
+                    <button onClick={() => setViewMode('Grid')} className={`p-3 rounded-lg transition-all ${viewMode === 'Grid' ? 'bg-white text-black shadow-md' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><LayoutGrid className="w-5 h-5"/></button>
+                </div>
+                {currentUser?.role !== 'Staff' && (
+                    <NeoButton onClick={handleAddNewClick} className="px-6 gap-2">
+                        <UserPlus className="w-5 h-5" /> Add Talent
+                    </NeoButton>
+                )}
+            </div>
         </div>
 
-        {/* View Switching */}
-        {viewMode === 'list' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr">
-            {filteredEmployees.map((emp) => (
-                <div 
-                key={emp.id} 
-                onClick={() => { setSelectedEmp(emp); setActiveTab('overview'); }}
-                className="group relative cursor-pointer rounded-3xl p-6 border transition-all duration-300 backdrop-blur-lg shadow-sm dark:shadow-glossy-card bg-white dark:bg-[#121212]/60 border-gray-200 dark:border-white/10 hover:border-blue-500/30 hover:translate-y-[-4px] flex flex-col h-full"
-                >
-                <div className={`absolute top-0 inset-x-0 h-1.5 rounded-t-3xl bg-gradient-to-r opacity-80 ${getDeptStyle(emp.department)}`}></div>
-                <div className="relative z-10 flex justify-between items-start mb-6">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black border border-gray-100 dark:border-white/10 shadow-inner bg-gray-50 dark:bg-zinc-900/80 text-black dark:text-white">
-                    {emp.name.charAt(0)}
+        {/* Toolbar */}
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+            <div className="relative flex-1 w-full">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input 
+                    type="text" 
+                    placeholder="Search by name, role, or department..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-white dark:bg-[#121212] border border-gray-200 dark:border-white/10 rounded-2xl focus:outline-none focus:border-purple-500 font-bold text-sm"
+                />
+            </div>
+            <div className="flex gap-2">
+                <div className="px-4 py-2 bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-black uppercase tracking-wider border border-purple-200 dark:border-purple-500/30 flex items-center">
+                    Total: {employees.length}
+                </div>
+                <div className="px-4 py-2 bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-xs font-black uppercase tracking-wider border border-green-200 dark:border-green-500/30 flex items-center">
+                    Active: {employees.filter(e => e.status === 'Active').length}
+                </div>
+            </div>
+        </div>
+
+        {/* Employee Grid/List */}
+        {viewMode === 'Grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredEmployees.map(emp => (
+                    <div key={emp.id} onClick={() => { setSelectedEmp(emp); setActiveTab('details'); }} className="group relative bg-white dark:bg-[#121212] border border-gray-200 dark:border-white/10 rounded-3xl p-6 hover:border-purple-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="w-16 h-16 bg-gray-100 dark:bg-white/5 rounded-2xl flex items-center justify-center text-2xl font-black text-gray-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                                {emp.name.charAt(0)}
+                            </div>
+                            <NeoBadge variant={emp.status === 'Active' ? 'success' : 'danger'}>{emp.status}</NeoBadge>
+                        </div>
+                        <h3 className="font-bold text-lg text-black dark:text-white mb-1 truncate">{emp.name}</h3>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">{emp.role}</p>
+                        
+                        <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center gap-2">
+                                <Briefcase className="w-4 h-4" /> {emp.department}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Mail className="w-4 h-4" /> <span className="truncate">{emp.email}</span>
+                            </div>
+                        </div>
                     </div>
-                    {emp.faceRegistered && (
-                      <div title="Face ID Registered">
-                        <ScanFace className="w-5 h-5 text-green-500 dark:text-green-400" />
-                      </div>
-                    )}
-                </div>
-
-                <h3 className="relative z-10 text-xl font-black mb-1 truncate text-black dark:text-white">{emp.name}</h3>
-                <p className="relative z-10 text-xs font-black uppercase tracking-widest mb-6 text-blue-600 dark:text-blue-400">{emp.role}</p>
-
-                <div className="relative z-10 pt-4 border-t border-gray-100 dark:border-white/10 mt-auto flex flex-wrap gap-2">
-                    {emp.skills?.slice(0, 2).map(skill => (
-                        <span key={skill} className="px-2 py-1 bg-gray-100 dark:bg-white/5 rounded text-[10px] text-gray-600 dark:text-gray-400">{skill}</span>
-                    ))}
-                    {emp.skills && emp.skills.length > 2 && <span className="px-2 py-1 bg-gray-100 dark:bg-white/5 rounded text-[10px] text-gray-600 dark:text-gray-400">+{emp.skills.length - 2}</span>}
-                </div>
-                </div>
-            ))}
+                ))}
             </div>
         ) : (
-            <div className="overflow-auto p-12 bg-white dark:bg-[#121212] rounded-3xl border border-gray-200 dark:border-white/10 min-h-[600px] flex justify-center transition-colors">
-                 {/* Root (CEO/Admin) */}
-                 <div className="flex flex-col items-center">
-                    {employees.filter(e => !e.reportsTo).map(root => (
-                        <div key={root.id} className="flex flex-col items-center">
-                             <div className="p-6 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-lg flex flex-col items-center min-w-[180px] cursor-pointer" onClick={() => { setSelectedEmp(root); setActiveTab('overview'); }}>
-                                <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-lg font-black text-white mb-2">{root.name.charAt(0)}</div>
-                                <span className="font-black text-black dark:text-white text-sm">{root.name}</span>
-                                <span className="text-xs text-blue-600 dark:text-blue-300 uppercase tracking-wider">{root.role}</span>
-                             </div>
-                             {renderOrgTree(root.id)}
-                        </div>
-                    ))}
-                 </div>
+            <div className="bg-white dark:bg-[#121212] border border-gray-200 dark:border-white/10 rounded-[2.5rem] overflow-hidden">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-gray-500 uppercase text-[10px] font-black tracking-widest">
+                            <th className="p-6">Employee</th>
+                            <th className="p-6">Role</th>
+                            <th className="p-6">Department</th>
+                            <th className="p-6">Status</th>
+                            <th className="p-6">Joined</th>
+                            <th className="p-6 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                        {filteredEmployees.map(emp => (
+                            <tr key={emp.id} onClick={() => { setSelectedEmp(emp); setActiveTab('details'); }} className="hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer group">
+                                <td className="p-6 font-bold flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-gray-200 dark:bg-white/10 rounded-full flex items-center justify-center text-xs font-black">{emp.name.charAt(0)}</div>
+                                    {emp.name}
+                                </td>
+                                <td className="p-6 text-sm font-medium">{emp.role}</td>
+                                <td className="p-6 text-sm text-gray-500">{emp.department}</td>
+                                <td className="p-6"><NeoBadge variant={emp.status === 'Active' ? 'success' : 'danger'}>{emp.status}</NeoBadge></td>
+                                <td className="p-6 text-sm font-mono text-gray-500">{emp.joinDate}</td>
+                                <td className="p-6 text-right">
+                                    <button onClick={(e) => { e.stopPropagation(); handleEditClick(emp); }} className="p-2 text-gray-400 hover:text-black dark:hover:text-white"><MoreHorizontal className="w-5 h-5"/></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         )}
-      </div>
 
-      {/* Detail Modal */}
-      {(selectedEmp && !isEditMode) && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity" onClick={() => setSelectedEmp(null)}></div>
-          <div className="relative w-full md:w-[900px] h-full shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 border-l border-gray-200 dark:border-white/10 bg-white dark:bg-[#0a0a0a] backdrop-blur-xl transition-colors">
-             
-             {/* Modal Header */}
-             <div className="p-6 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#121212]">
-                 <div className="flex justify-between items-start mb-6">
-                     <div>
-                        <h2 className="text-3xl font-black text-black dark:text-white uppercase tracking-tight">{selectedEmp.name}</h2>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest mt-1">{selectedEmp.role} • {selectedEmp.department}</p>
-                     </div>
-                     <div className="flex gap-2">
-                        <button onClick={() => handleEdit(selectedEmp)} className="p-3 bg-gray-200 dark:bg-white/5 rounded-xl text-black dark:text-white hover:bg-gray-300 dark:hover:bg-white/10"><MoreHorizontal className="w-5 h-5" /></button>
-                        <button onClick={() => setSelectedEmp(null)} className="p-3 bg-gray-200 dark:bg-white/5 rounded-xl text-black dark:text-white hover:bg-gray-300 dark:hover:bg-white/10"><X className="w-5 h-5" /></button>
-                     </div>
-                 </div>
+        {/* Employee Details Modal */}
+        <NeoModal isOpen={!!selectedEmp} onClose={() => setSelectedEmp(null)} title={selectedEmp?.name || 'Details'}>
+            {selectedEmp && (
+                <div className="space-y-6">
+                    <div className="flex gap-2 p-1 bg-gray-100 dark:bg-black rounded-xl border border-gray-200 dark:border-white/10">
+                        <button onClick={() => setActiveTab('details')} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${activeTab === 'details' ? 'bg-white text-black shadow-sm' : 'text-gray-500'}`}>Profile</button>
+                        <button onClick={() => setActiveTab('onboarding')} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${activeTab === 'onboarding' ? 'bg-white text-black shadow-sm' : 'text-gray-500'}`}>Onboarding</button>
+                    </div>
 
-                 {/* Tab Navigation */}
-                 <div className="flex gap-1 bg-gray-200 dark:bg-black/50 p-1 rounded-xl border border-gray-300 dark:border-white/10">
-                    <button 
-                        onClick={() => setActiveTab('overview')}
-                        className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'overview' ? 'bg-white text-black shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
-                    >
-                        <LayoutList className="w-4 h-4" /> Overview
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('attendance')}
-                        className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'attendance' ? 'bg-white text-black shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
-                    >
-                        <History className="w-4 h-4" /> Attendance Log
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('onboarding')}
-                        className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'onboarding' ? 'bg-white text-black shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white'}`}
-                    >
-                        <BookOpen className="w-4 h-4" /> Onboarding
-                    </button>
-                 </div>
-             </div>
-
-             {/* Modal Content */}
-             <div className="p-8 overflow-y-auto space-y-8 flex-1 bg-white dark:bg-[#0a0a0a]">
-                 
-                 {/* TAB: OVERVIEW */}
-                 {activeTab === 'overview' && (
-                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-                         <div className="grid grid-cols-2 gap-4">
-                             <NeoCard title="Skills Matrix" className="min-h-[150px]">
-                                 <div className="flex flex-wrap gap-2">
-                                     {selectedEmp.skills?.map(s => <NeoBadge key={s}>{s}</NeoBadge>) || <p className="text-gray-500 text-xs">No skills listed.</p>}
-                                 </div>
-                             </NeoCard>
-                             <NeoCard title="Biometrics" className="min-h-[150px]">
-                                 <div className="flex items-center gap-4 h-full">
-                                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedEmp.faceRegistered ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}>
-                                         <ScanFace className="w-6 h-6" />
-                                     </div>
-                                     <div>
-                                         <p className="font-bold text-black dark:text-white text-sm">{selectedEmp.faceRegistered ? 'Face ID Active' : 'Not Registered'}</p>
-                                         <p className="text-xs text-gray-500">ID: {selectedEmp.id}</p>
-                                     </div>
-                                 </div>
-                             </NeoCard>
-                         </div>
-                         
-                         <div className="p-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#121212]">
-                            <h3 className="font-black text-black dark:text-white uppercase text-sm mb-4">Contact & Employment</h3>
-                            <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm">
-                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Email</span><span className="text-black dark:text-white">{selectedEmp.email || 'N/A'}</span></div>
-                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Join Date</span><span className="text-black dark:text-white">{selectedEmp.joinDate}</span></div>
-                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Reports To</span><span className="text-black dark:text-white">{employees.find(e => e.id === selectedEmp.reportsTo)?.name || 'None'}</span></div>
-                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Base Salary</span><span className="text-black dark:text-white font-mono">RM {selectedEmp.baseSalary?.toLocaleString() || '0'}</span></div>
-                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Kiosk PIN</span><span className="text-black dark:text-white font-mono">{selectedEmp.pin || '------'}</span></div>
-                                <div><span className="block text-gray-500 text-xs uppercase font-bold">Status</span><span className={`font-bold ${selectedEmp.status === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{selectedEmp.status}</span></div>
-                            </div>
-                         </div>
-                     </div>
-                 )}
-
-                 {/* TAB: ATTENDANCE HISTORY */}
-                 {activeTab === 'attendance' && (
-                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-                         <div className="flex justify-between items-center mb-2">
-                            <h3 className="font-black text-black dark:text-white uppercase text-sm">Records ({attendanceHistory.length})</h3>
-                            <button className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase hover:underline">Download CSV</button>
-                         </div>
-                         
-                         <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121212] overflow-hidden">
-                             <table className="w-full text-left border-collapse">
-                                 <thead>
-                                     <tr className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-xs text-gray-500 uppercase font-black tracking-wider">
-                                         <th className="p-4">Date</th>
-                                         <th className="p-4">Check In</th>
-                                         <th className="p-4">Check Out</th>
-                                         <th className="p-4 text-center">Method</th>
-                                         <th className="p-4 text-center">Risk</th>
-                                         <th className="p-4 text-right">Status</th>
-                                     </tr>
-                                 </thead>
-                                 <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-sm font-bold text-black dark:text-white">
-                                     {attendanceHistory.length === 0 ? (
-                                         <tr><td colSpan={6} className="p-8 text-center text-gray-500">No records found.</td></tr>
-                                     ) : (
-                                         attendanceHistory.map(record => (
-                                             <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                                                 <td className="p-4 font-mono text-gray-600 dark:text-gray-300">{record.date}</td>
-                                                 <td className="p-4">{record.checkIn || '-'}</td>
-                                                 <td className="p-4">{record.checkOut || '-'}</td>
-                                                 <td className="p-4 text-center">
-                                                     {record.method === 'Face' && <ScanFace className="w-4 h-4 mx-auto text-blue-500 dark:text-blue-400" />}
-                                                     {record.method === 'QR' && <RefreshCcw className="w-4 h-4 mx-auto text-yellow-500 dark:text-yellow-400" />}
-                                                     {record.method === 'PIN' && <Hash className="w-4 h-4 mx-auto text-gray-400" />}
-                                                 </td>
-                                                 <td className="p-4 text-center">
-                                                     <div className={`
-                                                         inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase
-                                                         ${(record.riskScore || 0) > 50 ? 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30' : 'bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/30'}
-                                                     `}>
-                                                         {record.riskScore || 0}%
-                                                     </div>
-                                                 </td>
-                                                 <td className="p-4 text-right">
-                                                     <span className={`
-                                                         ${record.status === 'Present' ? 'text-green-600 dark:text-green-400' : record.status === 'Late' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}
-                                                     `}>
-                                                         {record.status}
-                                                     </span>
-                                                 </td>
-                                             </tr>
-                                         ))
-                                     )}
-                                 </tbody>
-                             </table>
-                         </div>
-                     </div>
-                 )}
-
-                 {/* TAB: ONBOARDING MANAGEMENT */}
-                 {activeTab === 'onboarding' && (
-                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-                         <div className="p-6 rounded-2xl bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-white/10 flex items-center gap-6">
-                             <div className="relative w-24 h-24 flex items-center justify-center">
-                                 <svg className="w-full h-full transform -rotate-90">
-                                     <circle cx="48" cy="48" r="40" stroke="#333" strokeWidth="8" fill="none" className="stroke-gray-300 dark:stroke-[#333]" />
-                                     <circle 
-                                         cx="48" cy="48" r="40" stroke="#db2777" strokeWidth="8" fill="none" 
-                                         strokeDasharray="251.2" 
-                                         strokeDashoffset={251.2 - (251.2 * ((selectedEmp.onboardingStep || 0) / 4))} 
-                                         className="transition-all duration-1000 ease-out"
-                                     />
-                                 </svg>
-                                 <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                     <span className="text-2xl font-black text-black dark:text-white">{selectedEmp.onboardingStep || 0}/4</span>
-                                     <span className="text-[10px] text-gray-500 uppercase font-bold">Steps</span>
-                                 </div>
-                             </div>
-                             <div>
-                                 <h3 className="font-black text-black dark:text-white uppercase text-lg mb-1">Onboarding Progress</h3>
-                                 <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
-                                     Current status of {selectedEmp.name}'s onboarding journey.
-                                 </p>
-                                 <div className="flex gap-2">
-                                     {selectedEmp.onboardingStep === 4 ? (
-                                         <span className="bg-green-500/20 text-green-600 dark:text-green-400 px-3 py-1 rounded text-xs font-bold border border-green-500/30 flex items-center gap-2">
-                                             <CheckCircle className="w-3 h-3" /> Completed
-                                         </span>
-                                     ) : (
-                                         <span className="bg-pink-500/20 text-pink-600 dark:text-pink-400 px-3 py-1 rounded text-xs font-bold border border-pink-500/30 flex items-center gap-2">
-                                             <Clock className="w-3 h-3" /> In Progress
-                                         </span>
-                                     )}
-                                 </div>
-                             </div>
-                         </div>
-
-                         <div className="grid grid-cols-2 gap-4">
-                             <button 
-                                onClick={() => handleResetOnboarding(selectedEmp.id)}
-                                className="p-4 rounded-xl border-2 border-dashed border-red-500/30 hover:bg-red-500/10 text-red-600 dark:text-red-400 font-bold uppercase text-xs transition-colors flex flex-col items-center justify-center gap-2"
-                             >
-                                 <RefreshCcw className="w-6 h-6" />
-                                 Reset Progress
-                             </button>
-                             <button 
-                                onClick={() => handleCompleteOnboarding(selectedEmp.id)}
-                                className="p-4 rounded-xl border-2 border-dashed border-green-500/30 hover:bg-green-500/10 text-green-600 dark:text-green-400 font-bold uppercase text-xs transition-colors flex flex-col items-center justify-center gap-2"
-                             >
-                                 <CheckCircle className="w-6 h-6" />
-                                 Mark Complete
-                             </button>
-                         </div>
-
-                         <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 p-4 rounded-xl">
-                             <h4 className="font-bold text-black dark:text-white text-xs uppercase mb-2">Step Log</h4>
-                             <ul className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
-                                 <li className={(selectedEmp.onboardingStep || 0) > 0 ? 'text-green-600 dark:text-green-400' : ''}>1. Profile Setup & Banking Info</li>
-                                 <li className={(selectedEmp.onboardingStep || 0) > 1 ? 'text-green-600 dark:text-green-400' : ''}>2. Document Submission (IC/Certs)</li>
-                                 <li className={(selectedEmp.onboardingStep || 0) > 2 ? 'text-green-600 dark:text-green-400' : ''}>3. Handbook Acknowledgement</li>
-                                 <li className={(selectedEmp.onboardingStep || 0) > 3 ? 'text-green-600 dark:text-green-400' : ''}>4. Final Review</li>
-                             </ul>
-                         </div>
-                     </div>
-                 )}
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {isEditMode && (
-         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setIsEditMode(false)}></div>
-            <div className="relative w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-200 dark:border-white/10 backdrop-blur-xl bg-white dark:bg-[#121212] transition-colors">
-               <div className="p-6 border-b border-gray-200 dark:border-white/10 flex justify-between items-center">
-                  <h3 className="font-black text-lg text-black dark:text-white uppercase">{selectedEmp ? 'Edit Profile' : 'New Employee'}</h3>
-                  <button onClick={() => setIsEditMode(false)}><X className="w-5 h-5 text-gray-500" /></button>
-               </div>
-               
-               <div className="p-8 overflow-y-auto space-y-6">
-                  {/* Face Registration UI */}
-                  {isFaceRegMode ? (
-                      <div className="bg-black p-8 rounded-2xl border-[4px] border-white text-center shadow-2xl">
-                          <div className="flex items-center justify-center gap-3 mb-4">
-                             <ShieldAlert className="w-6 h-6 text-red-500 animate-pulse" />
-                             <h4 className="text-white font-black uppercase text-xl">Identity Verification</h4>
-                          </div>
-                          <div className="w-64 h-64 mx-auto bg-gray-900 rounded-3xl mb-6 relative overflow-hidden border-[6px] border-[#FFD700] shadow-[0_0_30px_rgba(255,215,0,0.3)]">
-                             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/10 to-transparent animate-scan z-10"></div>
-                             {/* Real Camera View */}
-                             <video 
-                                 ref={videoRef}
-                                 autoPlay
-                                 muted
-                                 className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
-                             />
-                             <div className="absolute bottom-4 inset-x-0 text-center z-20">
-                                <span className="bg-black/80 text-white text-xs px-3 py-1 rounded-full border border-white/30">Hold still for secure scan</span>
-                             </div>
-                          </div>
-                          <div className="flex justify-center gap-4">
-                              <NeoButton onClick={() => setIsFaceRegMode(false)} variant="danger">Cancel</NeoButton>
-                              <NeoButton onClick={captureFace} variant="primary" className="bg-[#FFD700] text-black border-white hover:bg-yellow-400">
-                                <Camera className="w-5 h-5 mr-2" /> Capture Biometrics
-                              </NeoButton>
-                          </div>
-                      </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="col-span-2">
-                           <label className="text-xs text-gray-500 font-black uppercase">Name</label>
-                           <NeoInput value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                        </div>
-                        <div>
-                           <label className="text-xs text-gray-500 font-black uppercase">ID</label>
-                           <NeoInput value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} />
-                        </div>
-                        <div>
-                           <label className="text-xs text-gray-500 font-black uppercase">Kiosk PIN (6-digit)</label>
-                           <NeoInput maxLength={6} placeholder="123456" value={formData.pin || ''} onChange={e => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})} />
-                        </div>
-                        <div>
-                           <label className="text-xs text-gray-500 font-black uppercase">NRIC / Passport</label>
-                           <NeoInput value={formData.nric || ''} onChange={e => setFormData({...formData, nric: e.target.value})} placeholder="e.g. 850101-14-1234" />
-                        </div>
-                        <div>
-                           <label className="text-xs text-gray-500 font-black uppercase">Role</label>
-                           <NeoInput value={formData.role || ''} onChange={e => setFormData({...formData, role: e.target.value})} />
-                        </div>
-                        <div>
-                           <label className="text-xs text-gray-500 font-black uppercase">Manager (Reports To)</label>
-                           <select 
-                             className="w-full bg-white dark:bg-[#0a0a0a] border-2 border-gray-300 dark:border-white/10 rounded-xl p-4 text-black dark:text-white text-sm font-bold"
-                             value={formData.reportsTo || ''}
-                             onChange={e => setFormData({...formData, reportsTo: e.target.value})}
-                           >
-                              <option value="">None (Root)</option>
-                              {employees.filter(e => e.id !== formData.id).map(e => (
-                                  <option key={e.id} value={e.id}>{e.name}</option>
-                              ))}
-                           </select>
-                        </div>
-                        <div>
-                           <label className="text-xs text-gray-500 font-black uppercase">Base Salary (RM)</label>
-                           <NeoInput type="number" value={formData.baseSalary || ''} onChange={e => setFormData({...formData, baseSalary: parseFloat(e.target.value)})} />
-                        </div>
-                        
-                        {/* Skills Multi-Select */}
-                        <div className="col-span-2">
-                            <label className="text-xs text-gray-500 font-black uppercase block mb-2">Skills & Competencies</label>
-                            <div className="p-4 rounded-xl border-2 border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#050505]">
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {(formData.skills || []).map(skill => (
-                                        <span key={skill} className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2">
-                                            {skill}
-                                            <button onClick={() => toggleSkill(skill)} className="hover:text-black"><X className="w-3 h-3" /></button>
-                                        </span>
-                                    ))}
+                    {activeTab === 'details' && (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                                    <p className="text-xs font-black text-gray-500 uppercase mb-1">Role</p>
+                                    <p className="font-bold">{selectedEmp.role}</p>
                                 </div>
-                                <div className="mb-4">
-                                    <div className="text-[10px] uppercase text-gray-500 font-bold mb-2">Quick Add</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {COMMON_SKILLS.filter(s => !formData.skills?.includes(s)).map(s => (
-                                            <button 
-                                                key={s} 
-                                                onClick={() => toggleSkill(s)}
-                                                className="px-2 py-1 border border-gray-300 dark:border-white/20 rounded-full text-xs text-gray-500 hover:bg-black hover:text-white transition-colors"
-                                            >
-                                                + {s}
-                                            </button>
-                                        ))}
+                                <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                                    <p className="text-xs font-black text-gray-500 uppercase mb-1">Department</p>
+                                    <p className="font-bold">{selectedEmp.department}</p>
+                                </div>
+                                <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                                    <p className="text-xs font-black text-gray-500 uppercase mb-1">Email</p>
+                                    <p className="font-bold truncate">{selectedEmp.email}</p>
+                                </div>
+                                <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                                    <p className="text-xs font-black text-gray-500 uppercase mb-1">Employment Type</p>
+                                    <p className="font-bold">{selectedEmp.employmentType}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="border-t border-gray-200 dark:border-white/10 pt-6 flex justify-between">
+                                <NeoButton variant="secondary" onClick={() => { setIsEditModalOpen(true); setFormEmp(selectedEmp); setSelectedEmp(null); }}>Edit Profile</NeoButton>
+                                {currentUser?.role === 'Admin' && (
+                                    <button onClick={() => handleDelete(selectedEmp.id)} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase flex items-center gap-2">
+                                        <Trash2 className="w-4 h-4" /> Terminate
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB: ONBOARDING MANAGEMENT */}
+                    {activeTab === 'onboarding' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                            <div className="p-6 rounded-2xl bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-white/10 flex items-center gap-6 overflow-hidden">
+                                <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
+                                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 96 96">
+                                        <circle cx="48" cy="48" r="40" stroke="#333" strokeWidth="8" fill="none" className="stroke-gray-300 dark:stroke-[#333]" />
+                                        <circle 
+                                            cx="48" cy="48" r="40" stroke="#db2777" strokeWidth="8" fill="none" 
+                                            strokeDasharray="251.2" 
+                                            strokeDashoffset={251.2 - (251.2 * ((selectedEmp.onboardingStep || 0) / 4))} 
+                                            strokeLinecap="round"
+                                            className="transition-all duration-1000 ease-out"
+                                        />
+                                    </svg>
+                                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                                        <span className="text-2xl font-black text-black dark:text-white">{selectedEmp.onboardingStep || 0}/4</span>
+                                        <span className="text-[10px] text-gray-500 uppercase font-bold">Steps</span>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
-                                    <input 
-                                        value={newSkillInput}
-                                        onChange={e => setNewSkillInput(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && addCustomSkill()}
-                                        placeholder="Add custom skill..."
-                                        className="flex-1 bg-transparent border-b border-gray-300 dark:border-white/30 text-sm py-1 focus:outline-none focus:border-blue-500 text-black dark:text-white"
-                                    />
-                                    <button onClick={addCustomSkill} className="text-xs font-bold uppercase text-blue-600 dark:text-blue-400 hover:text-blue-500">Add</button>
+                                <div className="min-w-0">
+                                    <h3 className="font-black text-black dark:text-white uppercase text-lg mb-1 truncate">Onboarding Progress</h3>
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                                        Current status of {selectedEmp.name}'s onboarding journey.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        {selectedEmp.onboardingStep === 4 ? (
+                                            <span className="bg-green-500/20 text-green-600 dark:text-green-400 px-3 py-1 rounded text-xs font-bold border border-green-500/30 flex items-center gap-2">
+                                                <CheckCircle className="w-3 h-3" /> Completed
+                                            </span>
+                                        ) : (
+                                            <span className="bg-pink-500/20 text-pink-600 dark:text-pink-400 px-3 py-1 rounded text-xs font-bold border border-pink-500/30 flex items-center gap-2">
+                                                <Clock className="w-3 h-3" /> In Progress
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                            
+                            <div className="space-y-3">
+                                {[
+                                    { step: 1, label: "Profile Setup" },
+                                    { step: 2, label: "Document Upload" },
+                                    { step: 3, label: "Handbook Sign-off" },
+                                    { step: 4, label: "Completed" }
+                                ].map((s) => (
+                                    <div key={s.step} className={`flex items-center gap-4 p-3 rounded-xl border ${ (selectedEmp.onboardingStep || 0) >= s.step ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-500/20' : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 opacity-50' }`}>
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${ (selectedEmp.onboardingStep || 0) >= s.step ? 'bg-green-500 text-white' : 'bg-gray-300 dark:bg-white/20 text-gray-500' }`}>
+                                            { (selectedEmp.onboardingStep || 0) >= s.step ? <CheckCircle className="w-4 h-4" /> : s.step }
+                                        </div>
+                                        <span className="text-sm font-bold">{s.label}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
+                    )}
+                </div>
+            )}
+        </NeoModal>
 
-                        <div className="col-span-2">
-                           <label className="text-xs text-gray-500 font-black uppercase mb-2 block">Identity Verification</label>
-                           <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${formData.faceRegistered ? 'bg-green-500/5 border-green-500/50' : 'bg-red-500/5 border-red-500/50'}`}>
-                               <div className={`w-3 h-3 rounded-full ${formData.faceRegistered ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                               <span className="text-black dark:text-white font-bold text-sm flex-1">{formData.faceRegistered ? 'Biometrics Active' : 'Unregistered'}</span>
-                               <NeoButton variant="secondary" onClick={() => setIsFaceRegMode(true)}>
-                                   <ScanFace className="w-4 h-4 mr-2" />
-                                   {formData.faceRegistered ? 'Re-Enroll Securely' : 'Enroll Face ID'}
-                               </NeoButton>
-                           </div>
-                        </div>
+        {/* Add/Edit Modal */}
+        <NeoModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={formEmp.id ? 'Edit Employee' : 'New Hire'}>
+            <div className="space-y-4">
+                <NeoInput label="Full Name" value={formEmp.name || ''} onChange={e => setFormEmp({...formEmp, name: e.target.value})} placeholder="e.g. Ali Bin Abu" />
+                <NeoInput label="Email Address" value={formEmp.email || ''} onChange={e => setFormEmp({...formEmp, email: e.target.value})} placeholder="email@company.com" />
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-500 mb-2 block">Role</label>
+                        <NeoSelect value={formEmp.role || 'Staff'} onChange={e => setFormEmp({...formEmp, role: e.target.value})}>
+                            <option value="Staff">Staff</option>
+                            <option value="Manager">Manager</option>
+                            <option value="HR">HR</option>
+                            <option value="Admin">Admin</option>
+                        </NeoSelect>
                     </div>
-                  )}
-               </div>
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-500 mb-2 block">Employment Type</label>
+                        <NeoSelect value={formEmp.employmentType || 'Permanent'} onChange={e => setFormEmp({...formEmp, employmentType: e.target.value as any})}>
+                            <option value="Permanent">Permanent</option>
+                            <option value="Contract">Contract</option>
+                            <option value="Intern">Intern</option>
+                            <option value="Part-Time">Part-Time</option>
+                        </NeoSelect>
+                    </div>
+                </div>
 
-               {!isFaceRegMode && (
-                   <div className="p-6 border-t border-gray-200 dark:border-white/10 flex justify-end gap-3 bg-gray-50 dark:bg-[#0a0a0a]">
-                      <button onClick={() => setIsEditMode(false)} className="px-6 py-3 rounded-xl font-bold text-sm text-gray-600 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10">Cancel</button>
-                      <button onClick={handleSave} className="px-6 py-3 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-700">Save System Record</button>
-                   </div>
-               )}
+                <div className="grid grid-cols-2 gap-4">
+                    <NeoInput label="Department" value={formEmp.department || ''} onChange={e => setFormEmp({...formEmp, department: e.target.value})} />
+                    <NeoInput label="Basic Salary (RM)" type="number" value={formEmp.baseSalary || 0} onChange={e => setFormEmp({...formEmp, baseSalary: parseFloat(e.target.value)})} />
+                </div>
+
+                <NeoInput label="Join Date" type="date" value={formEmp.joinDate || ''} onChange={e => setFormEmp({...formEmp, joinDate: e.target.value})} />
+
+                <NeoButton onClick={handleSaveEmployee} className="w-full mt-4">
+                    {formEmp.id ? 'Save Changes' : 'Onboard Employee'}
+                </NeoButton>
             </div>
-         </div>
-      )}
+        </NeoModal>
+
     </div>
   );
 };

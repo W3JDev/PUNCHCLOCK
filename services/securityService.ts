@@ -36,7 +36,7 @@ export const detectLocationSpoofing = (location: GeoLocation): string[] => {
   const risks: string[] = [];
   
   // Risk 1: Impossible Accuracy (Simulators often return exact integers or 0)
-  if (location.accuracy === 0 || location.accuracy % 100 === 0) {
+  if (location.accuracy === 0) {
     risks.push("Suspiciously perfect GPS signal (Possible Emulator)");
   }
 
@@ -75,34 +75,32 @@ export const calculateAttendanceRisk = (
 
   // 1. Location Risk
   if (!location) {
-    score += 50;
-    reasons.push("Location data missing");
+    score += 100; // Critical Block
+    reasons.push("Location data missing - Enable GPS");
   } else {
     const dist = calculateDistance(location.lat, location.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-    if (dist > 1000) { // > 1km
-      score += 75;
-      reasons.push(`Far from office (${(dist/1000).toFixed(1)}km)`);
-    } else if (dist > 300) { // > 300m
-      score += 30;
-      reasons.push("Outside office perimeter");
+    
+    // STRICT GEOFENCE (100m)
+    if (dist > 100) { 
+      score += 100; // Critical Block
+      reasons.push(`OUT OF ZONE: You are ${Math.round(dist)}m away from HQ (Limit: 100m)`);
+    } else if (dist > 50) { 
+      score += 30; // Warning
+      reasons.push("GPS Drifting - Near Perimeter");
     }
   }
 
-  // 2. Time Risk (Late/Early)
+  // 2. Time Risk (Late/Early) - Handled by Shift Logic in Attendance.tsx mostly, but keep for fallback
   const hour = time.getHours();
-  // Assume shift starts at 9am
-  if (hour >= 10) {
-    score += 20;
-    reasons.push("Late Arrival (>1 hour)");
-  } else if (hour < 6) {
+  if (hour < 6) {
     score += 10;
     reasons.push("Unusual hours (Very early)");
   }
 
   // 3. Status Risk
   if (employee.status === 'MIA' || employee.status === 'Terminated') {
-    score += 90;
-    reasons.push(`Employee status is ${employee.status}`);
+    score += 100;
+    reasons.push(`ACCESS DENIED: Employee status is ${employee.status}`);
   }
 
   return { score: Math.min(score, 100), reasons };

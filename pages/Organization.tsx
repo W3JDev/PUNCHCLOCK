@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
 import { NeoCard, NeoButton, NeoInput, NeoSelect } from '../components/NeoComponents';
-import { Building2, FileText, Calendar, Plus, Trash2, Save, Image, Upload, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Building2, FileText, Calendar, Plus, Trash2, Save, Image, Upload, Sparkles, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import { CompanyEvent } from '../types';
 import { generateHRDocument, generateDashboardWallpaper } from '../services/geminiService';
 
 export const Organization: React.FC = () => {
   const { currentUser, companyProfile, updateCompanyProfile, events, addEvent, deleteEvent, addNotification } = useGlobal();
-  const [activeTab, setActiveTab] = useState<'branding' | 'policy' | 'events'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'policy' | 'events' | 'rules'>('branding');
   const [newEvent, setNewEvent] = useState<Partial<CompanyEvent>>({ type: 'Meeting' });
   const [isGeneratingPolicy, setIsGeneratingPolicy] = useState(false);
   const [policyTopic, setPolicyTopic] = useState('');
@@ -94,15 +94,29 @@ export const Organization: React.FC = () => {
     setIsGeneratingWallpaper(false);
   };
 
+  const updateRule = (key: string, value: number) => {
+      const currentRules = companyProfile.attendanceRules || {
+          gracePeriodMins: 15,
+          latePenalty: 0,
+          otMultiplierNormal: 1.5,
+          otMultiplierWeekend: 2.0,
+          otMultiplierHoliday: 3.0
+      };
+      updateCompanyProfile({
+          ...companyProfile,
+          attendanceRules: { ...currentRules, [key]: value }
+      });
+  };
+
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-8 pb-20 animate-in fade-in">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h1 className="text-4xl font-black text-black dark:text-white uppercase tracking-tighter">Organization Setup</h1>
                 <p className="text-gray-500 dark:text-gray-400">Manage branding, policies, and company-wide events.</p>
             </div>
             <div className="flex bg-gray-100 dark:bg-[#1a1a1a] p-1 rounded-xl border border-gray-200 dark:border-white/10">
-                {['branding', 'policy', 'events'].map((tab) => (
+                {['branding', 'rules', 'policy', 'events'].map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab as any)}
@@ -202,6 +216,65 @@ export const Organization: React.FC = () => {
                             onChange={e => updateCompanyProfile({...companyProfile, address: e.target.value})}
                             placeholder="Full Address"
                         />
+                    </div>
+                </NeoCard>
+            </div>
+        )}
+
+        {activeTab === 'rules' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <NeoCard title="Attendance Logic" className="border-l-4 border-orange-500">
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">Grace Period (Minutes)</label>
+                            <NeoInput 
+                                type="number" 
+                                value={companyProfile.attendanceRules?.gracePeriodMins || 15} 
+                                onChange={e => updateRule('gracePeriodMins', parseInt(e.target.value))}
+                            />
+                            <p className="text-[10px] text-gray-500 mt-2">Time allowed after shift start before marked 'Late'.</p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">Late Penalty (RM/Min)</label>
+                            <NeoInput 
+                                type="number" 
+                                value={companyProfile.attendanceRules?.latePenalty || 0} 
+                                onChange={e => updateRule('latePenalty', parseFloat(e.target.value))}
+                            />
+                            <p className="text-[10px] text-gray-500 mt-2">Deduction amount per minute late (Optional).</p>
+                        </div>
+                    </div>
+                </NeoCard>
+
+                <NeoCard title="Overtime Multipliers" className="border-l-4 border-green-500">
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Normal Day</label>
+                                <NeoInput 
+                                    type="number" step="0.5"
+                                    value={companyProfile.attendanceRules?.otMultiplierNormal || 1.5} 
+                                    onChange={e => updateRule('otMultiplierNormal', parseFloat(e.target.value))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Rest Day</label>
+                                <NeoInput 
+                                    type="number" step="0.5"
+                                    value={companyProfile.attendanceRules?.otMultiplierWeekend || 2.0} 
+                                    onChange={e => updateRule('otMultiplierWeekend', parseFloat(e.target.value))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Public Holiday</label>
+                                <NeoInput 
+                                    type="number" step="0.5"
+                                    value={companyProfile.attendanceRules?.otMultiplierHoliday || 3.0} 
+                                    onChange={e => updateRule('otMultiplierHoliday', parseFloat(e.target.value))}
+                                />
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500">Standard rates per Employment Act 1955: 1.5x (Normal), 2.0x (Rest Day), 3.0x (Public Holiday).</p>
                     </div>
                 </NeoCard>
             </div>

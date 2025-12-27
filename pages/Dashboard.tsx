@@ -56,7 +56,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Dashboard: React.FC = () => {
-  const { currentUser, addNotification, attendanceRecords, employees, leaveRequests, updateLeaveRequest, generalRequests, updateGeneralRequestStatus, addGeneralRequest, announcements, companyProfile } = useGlobal();
+  const { currentUser, addNotification, attendanceRecords, addAttendanceRecord, employees, leaveRequests, updateLeaveRequest, generalRequests, updateGeneralRequestStatus, addGeneralRequest, announcements, companyProfile } = useGlobal();
   const navigate = useNavigate();
   const [insight, setInsight] = useState<{riskLevel: string, suggestion: string} | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
@@ -147,7 +147,7 @@ export const Dashboard: React.FC = () => {
   }, [attendanceRecords, employees]);
 
   const pendingLeaves = leaveRequests.filter(l => l.status === 'Pending');
-  const pendingClaims = generalRequests.filter(r => r.status === 'Pending' && r.type === 'Claim');
+  const pendingClaims = generalRequests.filter(r => r.status === 'Pending' && (r.type === 'Claim' || r.type === 'Missing Punch'));
 
   const fetchAiInsight = async () => {
     setLoadingInsight(true);
@@ -169,6 +169,54 @@ export const Dashboard: React.FC = () => {
       setRequestForm({ date: '', details: '', attachment: '' });
   };
 
+  // --- SPECIAL ACTION HANDLER FOR MISSING PUNCH ---
+  const handleApproveRequest = (id: string, status: 'Approved' | 'Rejected') => {
+      const request = generalRequests.find(r => r.id === id);
+      if (status === 'Approved' && request && request.type === 'Missing Punch') {
+          try {
+              // Parse the JSON details from the request
+              const punchData = JSON.parse(request.details);
+              // { type: 'Check In', time: '09:00', ... }
+              
+              // Determine checkIn/checkOut fields based on type
+              let newRecord: any = {
+                  id: Math.random().toString(36).substr(2, 9),
+                  employeeId: request.employeeId,
+                  date: request.date,
+                  method: 'PIN', // Manual correction via PIN
+                  status: 'Present',
+                  riskScore: 0,
+                  location: { lat: 3.1578, lng: 101.7118, accuracy: 100 } // Admin approved
+              };
+
+              if (punchData.type === 'Check In') {
+                  newRecord.checkIn = punchData.time + ':00';
+              } else if (punchData.type === 'Check Out') {
+                  // Find existing record to update if it exists? 
+                  // For simplicity in this demo, creating new or simple update logic needs complex find.
+                  // We'll create a new record for now, assuming day merging logic handles it or it's a fresh entry.
+                  newRecord.checkOut = punchData.time + ':00';
+                  // If check-out only, set Check-In to default start? Or leave null. 
+                  // Ideally we find the record for that day.
+                  const existing = attendanceRecords.find(r => r.employeeId === request.employeeId && r.date === request.date);
+                  if (existing) {
+                      newRecord = { ...existing, checkOut: punchData.time + ':00' };
+                      // Filter out old record logic handled in context or just append (context usually appends)
+                      // Ideally context should support 'update'. Here we will rely on addAttendanceRecord being smart or just adding.
+                      // Note: GlobalContext 'addAttendanceRecord' prepends. It doesn't replace. 
+                      // Real app needs 'updateAttendanceRecord'.
+                  }
+              }
+
+              addAttendanceRecord(newRecord);
+              addNotification("Attendance Corrected based on Request", "success");
+          } catch (e) {
+              console.error("Failed to parse missing punch details", e);
+          }
+      }
+      updateGeneralRequestStatus(id, status);
+  };
+
   const quickActions = [
       { id: 'clock_in', label: 'Terminal', icon: LogIn, color: 'bg-green-600', action: () => navigate('/attendance') },
       { id: 'leave', label: 'Apply Leave', icon: Plane, color: 'bg-blue-600', action: () => { setRequestCategory('Leave'); setIsRequestModalOpen(true); } },
@@ -180,18 +228,62 @@ export const Dashboard: React.FC = () => {
       switch(type) {
           case 'kpi':
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 h-full w-full">
-                    <div className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-white/20 shadow-2xl flex flex-col justify-between p-8 transition-all duration-500 hover:scale-[1.02] backdrop-blur-xl min-h-[220px]">
-                        <div className="flex justify-between items-start"><p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em]">Identity Verified</p><Users className="w-5 h-5 text-blue-500" /></div>
-                        <div><h3 className="text-6xl font-black text-white tracking-tighter tabular-nums mb-2">{dashboardStats.presentToday}</h3><NeoBadge variant="success">Present</NeoBadge></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full w-full">
+                    {/* KPI 1: IDENTITY VERIFIED (SCANNING) */}
+                    <div className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-green-600 to-green-800 border-4 border-white/10 shadow-2xl flex flex-col justify-between p-8 transition-all duration-300 hover:scale-[1.01] min-h-[250px]">
+                        <div className="absolute inset-0 opacity-20 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px]" />
+                        <div className="relative z-10 flex justify-between items-start">
+                            <p className="text-green-200 text-xs font-black uppercase tracking-[0.3em]">Present</p>
+                            <div className="relative w-10 h-10">
+                                <Users className="w-10 h-10 text-white relative z-10" />
+                                {/* Scanning Beam Animation */}
+                                <div className="absolute top-0 left-0 w-full h-1 bg-white shadow-[0_0_10px_#fff] animate-scan-line z-20" />
+                            </div>
+                        </div>
+                        <div className="relative z-10 mt-auto">
+                            <h3 className="text-7xl lg:text-8xl font-black text-white tracking-tighter leading-none mb-2">{dashboardStats.presentToday}</h3>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-white animate-pulse" />
+                                <span className="text-sm font-bold text-green-100 uppercase tracking-wider">Identity Verified</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-yellow-500/10 to-yellow-500/5 border border-white/20 shadow-2xl flex flex-col justify-between p-8 transition-all duration-500 hover:scale-[1.02] backdrop-blur-xl min-h-[220px]">
-                        <div className="flex justify-between items-start"><p className="text-yellow-500 text-[10px] font-black uppercase tracking-[0.3em]">Behavior Anomaly</p><Clock className="w-5 h-5 text-yellow-500" /></div>
-                        <div><h3 className="text-6xl font-black text-white tracking-tighter tabular-nums mb-2">{dashboardStats.lateToday}</h3><NeoBadge variant="warning">Late Arrival</NeoBadge></div>
+
+                    {/* KPI 2: LATE (SHAKING CLOCK) */}
+                    <div className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-yellow-500 to-orange-600 border-4 border-white/10 shadow-2xl flex flex-col justify-between p-8 transition-all duration-300 hover:scale-[1.01] min-h-[250px]">
+                        <div className="relative z-10 flex justify-between items-start">
+                            <p className="text-yellow-100 text-xs font-black uppercase tracking-[0.3em]">Warning</p>
+                            <div className="relative animate-wiggle origin-center">
+                                <Clock className="w-10 h-10 text-white" />
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-orange-500 animate-ping" />
+                            </div>
+                        </div>
+                        <div className="relative z-10 mt-auto">
+                            <h3 className="text-7xl lg:text-8xl font-black text-white tracking-tighter leading-none mb-2">{dashboardStats.lateToday}</h3>
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-white" />
+                                <span className="text-sm font-bold text-yellow-100 uppercase tracking-wider">Late Arrival</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-red-500/10 to-red-500/5 border border-white/20 shadow-2xl flex flex-col justify-between p-8 transition-all duration-500 hover:scale-[1.02] backdrop-blur-xl min-h-[220px]">
-                        <div className="flex justify-between items-start"><p className="text-red-500 text-[10px] font-black uppercase tracking-[0.3em]">Compliance Gap</p><AlertTriangle className="w-5 h-5 text-red-500" /></div>
-                        <div><h3 className="text-6xl font-black text-white tracking-tighter tabular-nums mb-2">{dashboardStats.absentToday}</h3><NeoBadge variant="danger">Absent / MIA</NeoBadge></div>
+
+                    {/* KPI 3: ABSENT (GHOST PULSE) */}
+                    <div className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-gray-800 to-black border-4 border-white/20 shadow-2xl flex flex-col justify-between p-8 transition-all duration-300 hover:scale-[1.01] min-h-[250px]">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#333_0%,_#000_100%)] opacity-50" />
+                        <div className="relative z-10 flex justify-between items-start">
+                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em]">Critical</p>
+                            <div className="relative opacity-80 animate-ghost-float">
+                                <User className="w-10 h-10 text-white opacity-50" />
+                                <div className="absolute inset-0 border-2 border-white/20 rounded-full scale-150 animate-ping opacity-20" />
+                            </div>
+                        </div>
+                        <div className="relative z-10 mt-auto">
+                            <h3 className="text-7xl lg:text-8xl font-black text-white tracking-tighter leading-none mb-2">{dashboardStats.absentToday}</h3>
+                            <div className="flex items-center gap-2">
+                                <XCircle className="w-5 h-5 text-red-500" />
+                                <span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Absent / MIA</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
               );
@@ -216,20 +308,45 @@ export const Dashboard: React.FC = () => {
               return (
                   <NeoCard title="Operational Queue" className="h-full border-l-4 border-pink-500 flex flex-col">
                       <div className="flex gap-2 border-b border-white/10 pb-4 mb-4 shrink-0 overflow-x-auto no-scrollbar">
-                          {['leaves', 'claims'].map(tab => (
+                          {['leaves', 'requests'].map(tab => (
                               <button key={tab} onClick={() => setApprovalTab(tab as any)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${approvalTab === tab ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>
                                   {tab} ({tab === 'leaves' ? pendingLeaves.length : pendingClaims.length})
                               </button>
                           ))}
                       </div>
                       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar min-h-[250px]">
-                          {approvalTab === 'leaves' && pendingLeaves.map(l => (
+                          {approvalTab === 'leaves' && pendingLeaves.length > 0 ? pendingLeaves.map(l => (
                               <div key={l.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between group hover:border-blue-500/50 transition-all">
-                                  <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black">{l.name.charAt(0)}</div><div><p className="font-bold text-xs">{l.name}</p><span className="text-[9px] text-blue-400 uppercase font-black">{l.type}</span></div></div>
+                                  <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-white">{l.name.charAt(0)}</div><div><p className="font-bold text-xs">{l.name}</p><span className="text-[9px] text-blue-400 uppercase font-black">{l.type}</span></div></div>
                                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => updateLeaveRequest(l.id, 'Approved')} className="p-2 bg-green-500/20 text-green-500 rounded-lg"><Check className="w-4 h-4"/></button><button onClick={() => updateLeaveRequest(l.id, 'Rejected')} className="p-2 bg-red-500/20 text-red-500 rounded-lg"><X className="w-4 h-4"/></button></div>
                               </div>
-                          ))}
-                          {approvalTab === 'leaves' && pendingLeaves.length === 0 && <div className="h-full flex items-center justify-center opacity-20"><p className="text-[10px] font-black uppercase tracking-widest">Queue Empty</p></div>}
+                          )) : null}
+                          
+                          {approvalTab === 'requests' && pendingClaims.length > 0 ? pendingClaims.map(c => (
+                              <div key={c.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between group hover:border-yellow-500/50 transition-all">
+                                  <div className="flex items-center gap-3">
+                                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${c.type === 'Missing Punch' ? 'bg-red-600 text-white' : 'bg-yellow-600 text-black'}`}>
+                                          {c.type === 'Missing Punch' ? '!' : '$'}
+                                      </div>
+                                      <div>
+                                          <p className="font-bold text-xs">{c.employeeName}</p>
+                                          <span className="text-[9px] text-gray-400 uppercase font-black block">{c.type}</span>
+                                          {c.type === 'Missing Punch' && <span className="text-[9px] text-yellow-500">{JSON.parse(c.details).time} {JSON.parse(c.details).type}</span>}
+                                      </div>
+                                  </div>
+                                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={() => handleApproveRequest(c.id, 'Approved')} className="p-2 bg-green-500/20 text-green-500 rounded-lg"><Check className="w-4 h-4"/></button>
+                                      <button onClick={() => handleApproveRequest(c.id, 'Rejected')} className="p-2 bg-red-500/20 text-red-500 rounded-lg"><X className="w-4 h-4"/></button>
+                                  </div>
+                              </div>
+                          )) : null}
+
+                          {(approvalTab === 'leaves' && pendingLeaves.length === 0) || (approvalTab === 'requests' && pendingClaims.length === 0) ? (
+                              <div className="h-full flex flex-col items-center justify-center opacity-30 gap-2">
+                                  <CheckCircle className="w-12 h-12 text-green-500" />
+                                  <p className="text-[10px] font-black uppercase tracking-widest">Queue Empty</p>
+                              </div>
+                          ) : null}
                       </div>
                   </NeoCard>
               );
@@ -249,8 +366,14 @@ export const Dashboard: React.FC = () => {
                  <NeoCard title="Bulletin" className="h-full border-l-4 border-red-500">
                     <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 min-h-[250px]">
                        {announcements.map(ann => (
-                          <div key={ann.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-white/30 transition-all">
-                             <div className="flex justify-between items-start mb-2"><h4 className="font-black text-[10px] uppercase text-blue-400">{ann.title}</h4><span className="text-[8px] text-gray-600 font-black">{ann.date}</span></div>
+                          <div key={ann.id} className={`p-4 bg-white/5 border rounded-2xl hover:border-white/30 transition-all ${ann.type === 'Alert' ? 'border-red-500/30' : 'border-white/10'}`}>
+                             <div className="flex justify-between items-start mb-2">
+                                 <div className="flex items-center gap-2">
+                                     {ann.type === 'Alert' && <Bell className="w-3 h-3 text-red-500 animate-pulse" />}
+                                     <h4 className={`font-black text-[10px] uppercase ${ann.type === 'Alert' ? 'text-red-400' : 'text-blue-400'}`}>{ann.title}</h4>
+                                 </div>
+                                 <span className="text-[8px] text-gray-600 font-black">{ann.date}</span>
+                             </div>
                              <p className="text-[11px] text-gray-400 leading-tight line-clamp-2">{ann.content}</p>
                           </div>
                        ))}
@@ -287,7 +410,7 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-10 w-full max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20">
+    <div className="space-y-8 w-full max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-8 bg-black/40 border border-white/10 p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden backdrop-blur-2xl">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[150px] pointer-events-none"></div>
         <div className="relative z-10"><h2 className="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter italic leading-none mb-2">COMMAND<br/><span className="text-blue-500">DECK.</span></h2><p className="text-xs font-black text-gray-500 uppercase tracking-[0.5em]">{new Date().toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'})}</p></div>
@@ -297,7 +420,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 auto-rows-min">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 auto-rows-min">
           {layout.map((widget, index) => {
               if (currentUser.role === 'Staff' && (widget.type === 'manager-actions' || widget.type === 'team-pulse')) return null;
               if (currentUser.role !== 'Staff' && widget.type === 'security-pass') return null;

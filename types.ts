@@ -13,6 +13,13 @@ export interface CompanyProfile {
   policies?: string; // Markdown text for general handbook
   businessType?: 'Corporate' | 'F&B' | 'Retail' | 'Healthcare' | 'Logistics' | 'Technology'; // New: AI Context
   operatingHours?: { start: string; end: string }; // New: For auto-rostering
+  attendanceRules?: {
+    gracePeriodMins: number;
+    latePenalty: number; // RM deduction per minute
+    otMultiplierNormal: number;
+    otMultiplierWeekend: number;
+    otMultiplierHoliday: number;
+  };
 }
 
 export interface CompanyEvent {

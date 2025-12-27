@@ -13,6 +13,12 @@ let faceMatcher: any = null;
 
 export const loadFaceModels = async () => {
   try {
+    // Safety Check: Ensure global faceapi exists
+    if (typeof faceapi === 'undefined') {
+        console.warn("FaceAPI not loaded yet. Retrying...");
+        return false;
+    }
+
     if (!faceapi.nets.tinyFaceDetector.params) {
         console.log("Loading Biometric Models...");
         await Promise.all([
@@ -35,6 +41,8 @@ export const loadFaceModels = async () => {
  * This should be called once when employees are loaded.
  */
 export const initializeFaceMatcher = (employees: Employee[]) => {
+    if (typeof faceapi === 'undefined') return;
+
     const labeledDescriptors = employees
         .filter(e => e.faceRegistered && e.faceDescriptor && e.faceDescriptor.length > 0)
         .map(e => {
@@ -52,6 +60,7 @@ export const initializeFaceMatcher = (employees: Employee[]) => {
 };
 
 export const detectFace = async (video: HTMLVideoElement) => {
+  if (typeof faceapi === 'undefined') return null;
   if (!video || video.paused || video.ended) return null;
 
   // TinyFaceDetector is faster for real-time mobile/kiosk use. 
@@ -90,8 +99,10 @@ export const matchFaceFast = (descriptor: Float32Array): { match: any, distance:
 export const findDuplicateFace = (descriptor: Float32Array, currentEmployeeId?: string): { isDuplicate: boolean, matchedId?: string } => {
     if (!faceMatcher) return { isDuplicate: false };
     
+    // Check if this face matches ANYONE else in the db
     const bestMatch = faceMatcher.findBestMatch(descriptor);
     
+    // If it matches someone (not unknown) AND that someone is NOT the current person being edited
     if (bestMatch.label !== 'unknown' && bestMatch.label !== currentEmployeeId) {
         return { isDuplicate: true, matchedId: bestMatch.label };
     }
@@ -107,13 +118,16 @@ export const verifyLiveness = (expressions: any, challenge: 'Smile' | 'Neutral')
     
     // Thresholds for expression confidence
     const SMILE_THRESHOLD = 0.7;
+    const NEUTRAL_THRESHOLD = 0.6;
     
     if (challenge === 'Smile') {
+        // High happiness score
         return expressions.happy > SMILE_THRESHOLD;
     }
     
     if (challenge === 'Neutral') {
-        return expressions.neutral > SMILE_THRESHOLD;
+        // High neutral score
+        return expressions.neutral > NEUTRAL_THRESHOLD;
     }
 
     return false;

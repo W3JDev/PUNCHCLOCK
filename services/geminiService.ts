@@ -38,15 +38,22 @@ const buildContext = (
           ROLE_PERMISSION: Can ONLY view personal data.
         `;
     } else {
+        // Admin Aggregation
+        const otRisks = attendance.filter(a => (a.otMinutes || 0) > 120);
+        const topOTEarnerId = [...otRisks].sort((a,b) => (b.otMinutes || 0) - (a.otMinutes || 0))[0]?.employeeId;
+        const topOTEarner = allEmployees.find(e => e.id === topOTEarnerId)?.name || "None";
+
         const stats = {
-            total: allEmployees.length,
+            totalStaff: allEmployees.length,
             lateToday: attendance.filter(a => a.date === today && a.status === 'Late').length,
-            otHighRisk: attendance.filter(a => (a.otMinutes || 0) > 120).length,
+            otHighRiskCount: otRisks.length,
+            topOTEarner: topOTEarner
         };
+        
         specificContext = `
           ADMIN CONTEXT: Access to all 50 staff records.
           SNAPSHOT: ${JSON.stringify(stats)}
-          STAFF_SAMPLE: ${JSON.stringify(allEmployees.slice(0, 15).map(e => ({id: e.id, name: e.name, role: e.role, salary: e.baseSalary})))}
+          STAFF_SAMPLE: ${JSON.stringify(allEmployees.slice(0, 10).map(e => ({id: e.id, name: e.name, role: e.role, salary: e.baseSalary})))}
           ANOMALIES: ${JSON.stringify(attendance.filter(a => a.status === 'Late').slice(0, 5))}
         `;
     }
@@ -69,7 +76,14 @@ const buildContext = (
          - End with "ACTIONABLE RECOMMENDATIONS".
 
       4. VISUAL TRIGGERS:
-         - Append ONE relevant tag at the absolute end: [VISUAL: PAYROLL_CHART], [VISUAL: ATTENDANCE_CHART], [VISUAL: STAFF_TABLE], or [VISUAL: POLICY_DOC].
+         - Append ONE relevant tag at the absolute end to trigger UI components:
+         - [VISUAL: PAYROLL_FORECAST] -> For cost simulations/projections.
+         - [VISUAL: RISK_ANALYSIS] -> For identifying high-risk employees (late/OT).
+         - [VISUAL: ONBOARDING_PACK] -> When generating documents/contracts.
+         - [VISUAL: PAYROLL_LIVE] -> For current payroll runs.
+         - [VISUAL: ATTENDANCE_LIVE] -> For daily logs/lateness.
+         - [VISUAL: COMPLIANCE_LIVE] -> For legal checks.
+         - [VISUAL: OT_ANALYSIS] -> For detailed overtime breakdown.
 
       5. CONTEXTUAL SUGGESTIONS:
          - You MUST provide exactly 3 suggestions at the end: [SUGGESTIONS: Action 1, Action 2, Action 3].
